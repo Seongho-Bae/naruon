@@ -3,6 +3,8 @@
 import { useCallback, useState, useEffect, type ChangeEvent } from 'react';
 import { Database, FileText, HardDrive, RefreshCw, FolderOpen, CheckCircle2, Server, Upload, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { toSafeReactText } from '@/lib/safe-text';
+
 
 type WebdavWritebackIntentResponse = {
   intent: string;
@@ -44,7 +46,6 @@ type UniqueThreadIntentResponse = {
 type UniqueThreadStatus = 'idle' | 'loading' | 'success' | 'auth' | 'error';
 type EmailImportStatus = 'idle' | 'loading' | 'success' | 'auth' | 'error';
 type DocumentActionStatus = 'idle' | 'loading' | 'success' | 'auth' | 'error';
-type DocumentActionName = 'reparse' | 'embedding-regeneration-intent' | 'hwp-conversion-intent' | 'webdav-materialization-intent';
 
 type DataSurfaceStatus = 'loading' | 'ready' | 'error';
 
@@ -301,7 +302,6 @@ export function DataLayout() {
   const [emailImportFiles, setEmailImportFiles] = useState<File[]>([]);
   const [documentActionStatus, setDocumentActionStatus] = useState<DocumentActionStatus>('idle');
   const [documentActionResult, setDocumentActionResult] = useState<DataDocumentActionResponse | null>(null);
-  const [pendingDocumentAction, setPendingDocumentAction] = useState<DocumentActionName | null>(null);
   const [documentUploadFiles, setDocumentUploadFiles] = useState<File[]>([]);
   const [dataSurfaceStatus, setDataSurfaceStatus] = useState<DataSurfaceStatus>('loading');
   const [dataQualitySurface, setDataQualitySurface] = useState<DataQualitySurfaceResponse | null>(null);
@@ -451,7 +451,6 @@ export function DataLayout() {
 
     setDocumentActionStatus('loading');
     setDocumentActionResult(null);
-    setPendingDocumentAction(null);
     try {
       const documentType = getDocumentTypeForFile(file);
       if (!isTextDocumentUploadType(documentType)) {
@@ -476,7 +475,9 @@ export function DataLayout() {
     }
   }, [documentUploadFiles, loadDataQualitySurface]);
 
-  const requestDocumentAction = useCallback(async (action: DocumentActionName) => {
+  const requestDocumentAction = useCallback(async (
+    action: 'reparse' | 'embedding-regeneration-intent' | 'hwp-conversion-intent' | 'webdav-materialization-intent',
+  ) => {
     const asset = dataQualitySurface?.repository_assets.find((candidate) => (
       candidate.asset_key === selectedRepositoryAssetKey
     )) ?? dataQualitySurface?.repository_assets[0] ?? null;
@@ -494,7 +495,6 @@ export function DataLayout() {
 
     setDocumentActionStatus('loading');
     setDocumentActionResult(null);
-    setPendingDocumentAction(action);
     try {
       const result = await apiClient.post<DataDocumentActionResponse>(
         `/api/data/documents/${encodeURIComponent(asset.asset_key)}/${action}`,
@@ -508,8 +508,6 @@ export function DataLayout() {
     } catch (error: unknown) {
       const status = getApiErrorStatus(error);
       setDocumentActionStatus(status === 401 || status === 403 ? 'auth' : 'error');
-    } finally {
-      setPendingDocumentAction(null);
     }
   }, [
     dataQualitySurface,
@@ -526,10 +524,6 @@ export function DataLayout() {
   const isUniqueThreadLoading = uniqueThreadStatus === 'loading';
   const isEmailImportLoading = emailImportStatus === 'loading';
   const isDocumentActionLoading = documentActionStatus === 'loading';
-  const isReparseLoading = isDocumentActionLoading && pendingDocumentAction === 'reparse';
-  const isEmbeddingIntentLoading = isDocumentActionLoading && pendingDocumentAction === 'embedding-regeneration-intent';
-  const isHwpIntentLoading = isDocumentActionLoading && pendingDocumentAction === 'hwp-conversion-intent';
-  const isWebdavMaterializationLoading = isDocumentActionLoading && pendingDocumentAction === 'webdav-materialization-intent';
   const selectedWebdavAccount = webdavAccounts.find((account) => (
     account.source_id === selectedWebdavSourceId && account.writeback_enabled
   )) ?? webdavAccounts.find((account) => account.writeback_enabled) ?? null;
@@ -764,8 +758,8 @@ export function DataLayout() {
                           <div className="flex min-w-0 items-start gap-3">
                             <FileText className="mt-0.5 size-5 shrink-0 text-primary" />
                             <div className="min-w-0">
-                              <h3 className="break-all text-sm font-black">{asset.display_name}</h3>
-                              <p className="mt-1 break-all text-xs text-muted-foreground">{asset.source_label}</p>
+                              <h3 className="break-all text-sm font-black">{toSafeReactText(asset.display_name)}</h3>
+                              <p className="mt-1 break-all text-xs text-muted-foreground">{toSafeReactText(asset.source_label)}</p>
                             </div>
                           </div>
                         </div>
@@ -806,8 +800,8 @@ export function DataLayout() {
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <p className="text-xs font-black text-primary">선택한 원본 자산</p>
-                      <h2 className="mt-1 break-all text-lg font-black">{selectedRepositoryAsset.display_name}</h2>
-                      <p className="mt-1 break-all text-sm text-muted-foreground">{selectedRepositoryAsset.source_label}</p>
+                      <h2 className="mt-1 break-all text-lg font-black">{toSafeReactText(selectedRepositoryAsset.display_name)}</h2>
+                      <p className="mt-1 break-all text-sm text-muted-foreground">{toSafeReactText(selectedRepositoryAsset.source_label)}</p>
                     </div>
                     <span className={`w-fit shrink-0 rounded-full px-2 py-1 text-xs font-bold ${
                       selectedRepositoryAsset.state_code === 'ready' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'
@@ -821,57 +815,41 @@ export function DataLayout() {
                         type="button"
                         onClick={() => void requestDocumentAction('reparse')}
                         disabled={isDocumentActionLoading}
-                        aria-busy={isReparseLoading}
+                        aria-busy={isDocumentActionLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
-                        {isReparseLoading ? (
-                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <RefreshCw className="size-4" />
-                        )}
-                        {isReparseLoading ? '처리 중' : '재파싱 실행'}
+                        {isDocumentActionLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="size-4" />}
+                        {isDocumentActionLoading ? '처리 중' : '재파싱 실행'}
                       </button>
                       <button
                         type="button"
                         onClick={() => void requestDocumentAction('embedding-regeneration-intent')}
                         disabled={isDocumentActionLoading}
-                        aria-busy={isEmbeddingIntentLoading}
+                        aria-busy={isDocumentActionLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
-                        {isEmbeddingIntentLoading ? (
-                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Database className="size-4" />
-                        )}
-                        {isEmbeddingIntentLoading ? '처리 중' : '임베딩 재생성 의도'}
+                        {isDocumentActionLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Database className="size-4" />}
+                        {isDocumentActionLoading ? '처리 중' : '임베딩 재생성 의도'}
                       </button>
                       <button
                         type="button"
                         onClick={() => void requestDocumentAction('hwp-conversion-intent')}
                         disabled={isDocumentActionLoading}
-                        aria-busy={isHwpIntentLoading}
+                        aria-busy={isDocumentActionLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
-                        {isHwpIntentLoading ? (
-                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <FileText className="size-4" />
-                        )}
-                        {isHwpIntentLoading ? '처리 중' : 'HWP 변환 의도'}
+                        {isDocumentActionLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <FileText className="size-4" />}
+                        {isDocumentActionLoading ? '처리 중' : 'HWP 변환 의도'}
                       </button>
                       <button
                         type="button"
                         onClick={() => void requestDocumentAction('webdav-materialization-intent')}
                         disabled={isDocumentActionLoading || !selectedWebdavAccount || selectedWorkspaceDocument.state_code !== 'ready'}
-                        aria-busy={isWebdavMaterializationLoading}
+                        aria-busy={isDocumentActionLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {isWebdavMaterializationLoading ? (
-                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Server className="size-4" />
-                        )}
-                        {isWebdavMaterializationLoading ? '실행 중' : 'WebDAV 문서 실행 요청'}
+                        {isDocumentActionLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Server className="size-4" />}
+                        {isDocumentActionLoading ? '실행 중' : 'WebDAV 문서 실행 요청'}
                       </button>
                     </div>
                   )}
@@ -1077,8 +1055,8 @@ export function DataLayout() {
                       <div className="flex min-w-0 items-center gap-4">
                         <div className="p-2 rounded-lg bg-blue-100 text-blue-700"><RefreshCw className="size-4" /></div>
                         <div>
-                          <p className="break-all font-bold text-sm">{event.signal_key}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{event.detail_text ?? event.signal_key}</p>
+                          <p className="break-all font-bold text-sm">{toSafeReactText(event.signal_key)}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{toSafeReactText(event.detail_text ?? event.signal_key)}</p>
                         </div>
                       </div>
                       <div className="text-left sm:text-right">
@@ -1107,8 +1085,8 @@ export function DataLayout() {
                     <div key={stage.stage_key}>
                       <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
-                          <span className="text-sm font-bold">{index + 1}. {stage.display_name}</span>
-                          <p className="mt-1 text-xs text-muted-foreground">{stage.detail_text}</p>
+                          <span className="text-sm font-bold">{index + 1}. {toSafeReactText(stage.display_name)}</span>
+                          <p className="mt-1 text-xs text-muted-foreground">{toSafeReactText(stage.detail_text)}</p>
                           <p className="mt-1 text-xs font-semibold text-muted-foreground">원본 근거 연결됨</p>
                         </div>
                         <span className={`w-fit shrink-0 rounded-full px-2 py-1 text-xs font-bold ${getSurfaceStatusClass(stage.status_code)}`}>
@@ -1176,7 +1154,7 @@ export function DataLayout() {
                     <article key={collection.collection_key} className="rounded-xl border border-border bg-background p-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
-                          <h3 className="break-all text-sm font-black">{collection.display_name}</h3>
+                          <h3 className="break-all text-sm font-black">{toSafeReactText(collection.display_name)}</h3>
                           <p className="mt-1 text-xs font-semibold text-muted-foreground">원본 근거 연결됨</p>
                         </div>
                         <span className={`w-fit shrink-0 rounded-full px-2 py-1 text-xs font-bold ${getSurfaceStatusClass(collection.status_code)}`}>
@@ -1219,7 +1197,7 @@ export function DataLayout() {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 {(dataQualitySurface?.quality_checks.slice(0, 3) ?? []).map((check) => (
                   <div key={check.check_key} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                    <p className="text-xs font-bold text-muted-foreground mb-1">{check.display_name}</p>
+                    <p className="text-xs font-bold text-muted-foreground mb-1">{toSafeReactText(check.display_name)}</p>
                     <p className={`text-xl font-bold ${check.issue_count > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
                       {formatCount(check.issue_count)} / {formatCount(check.total_count)}
                     </p>
@@ -1256,8 +1234,8 @@ export function DataLayout() {
                     <article key={check.check_key} className="rounded-xl border border-border bg-background p-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
-                          <h3 className="text-sm font-black">{check.display_name}</h3>
-                          <p className="mt-1 text-sm leading-6 text-muted-foreground">{check.detail_text}</p>
+                          <h3 className="text-sm font-black">{toSafeReactText(check.display_name)}</h3>
+                          <p className="mt-1 text-sm leading-6 text-muted-foreground">{toSafeReactText(check.detail_text)}</p>
                           <p className="mt-1 text-xs font-semibold text-muted-foreground">원본 근거 연결됨</p>
                         </div>
                         <span className={`w-fit shrink-0 rounded-full px-2 py-1 text-xs font-bold ${getSurfaceStatusClass(check.status_code)}`}>
