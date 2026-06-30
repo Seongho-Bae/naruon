@@ -200,7 +200,7 @@ describe("EmailDetail", () => {
         if (url.endsWith("/api/emails/thread/thread-a")) return threadAResponse.promise;
         if (url.endsWith("/api/emails/thread/thread-b")) return threadBResponse.promise;
         if (url.endsWith("/api/llm/summarize")) {
-          return Promise.resolve(jsonResponse({ summary: "Summary", todos: [] }));
+          return Promise.resolve(jsonResponse({ summary: "맥락 종합", todos: [] }));
         }
         throw new Error(`Unexpected fetch: ${url}`);
       });
@@ -411,7 +411,7 @@ describe("EmailDetail", () => {
       if (url.endsWith("/api/emails/3")) return standaloneEmailResponse.promise;
       if (url.endsWith("/api/emails/thread/thread-a")) return threadResponse.promise;
       if (url.endsWith("/api/llm/summarize")) {
-        return Promise.resolve(jsonResponse({ summary: "Summary", todos: [] }));
+        return Promise.resolve(jsonResponse({ summary: "맥락 종합", todos: [] }));
       }
       throw new Error(`Unexpected fetch: ${url}`);
     });
@@ -578,14 +578,14 @@ describe("EmailDetail", () => {
     });
   });
 
-  it("shows shell command feedback when an email has no todos", async () => {
+  it("shows shell command feedback when an email has no action items", async () => {
     const email: TestEmail = {
       id: 12,
-      message_id: "<empty-todos@example.com>",
+      message_id: "<empty-action-items@example.com>",
       thread_id: null,
       sender: "empty@example.com",
       recipients: "user@example.com",
-      subject: "No todos",
+      subject: "No action items",
       date: "2026-05-17T12:00:00Z",
       body: "No follow-up needed.",
     };
@@ -610,7 +610,7 @@ describe("EmailDetail", () => {
     expect(container.textContent).toContain("캘린더에 반영할 실행 항목이 없습니다.");
   });
 
-  it("waits for summary todos before requesting a server-authoritative calendar writeback intent", async () => {
+  it("waits for context synthesis action items before requesting a server-authoritative calendar writeback intent", async () => {
     const email: TestEmail = {
       id: 9,
       message_id: "<calendar-command@example.com>",
@@ -729,5 +729,352 @@ describe("EmailDetail", () => {
 
     expect(container.textContent).toContain("Late B");
     expect(container.querySelector<HTMLTextAreaElement>('#reply-draft')?.value).toBe("");
+  });
+
+  it("handles errors when generating reply drafts", async () => {
+    const email: TestEmail = {
+      id: 15,
+      message_id: "<draft-error@example.com>",
+      thread_id: null,
+      sender: "draft@example.com",
+      recipients: "user@example.com",
+      subject: "Draft",
+      date: "2026-04-28T10:00:00Z",
+      body: "Draft me",
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void init;
+      const url = String(input);
+      if (url.endsWith("/api/emails/15")) return Promise.resolve(jsonResponse(email));
+      if (url.endsWith("/api/llm/summarize")) return Promise.resolve(jsonResponse({ summary: "맥락 종합", todos: [] }));
+      if (url.endsWith("/api/llm/draft")) return Promise.reject(new Error("Draft failed"));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={15} />);
+    });
+    await flushAsyncWork();
+
+    const textInput = container.querySelector<HTMLInputElement>('input[placeholder="예: 정중하게 답장해줘"]');
+    if (textInput) {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      setter?.call(textInput, "test");
+      textInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    const draftButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (b) => b.textContent?.includes("답장 초안 생성")
+    );
+    await act(async () => {
+      draftButton?.click();
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("답장 초안을 생성하지 못했습니다.");
+  });
+
+  it("handles errors when fetching thread fails", async () => {
+    const email: TestEmail = {
+      id: 16,
+      message_id: "<thread-error@example.com>",
+      thread_id: "thread-err",
+      sender: "err@example.com",
+      recipients: "user@example.com",
+      subject: "Err",
+      date: "2026-04-28T10:00:00Z",
+      body: "Err",
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void init;
+      const url = String(input);
+      if (url.endsWith("/api/emails/16")) return Promise.resolve(jsonResponse(email));
+      if (url.endsWith("/api/llm/summarize")) return Promise.resolve(jsonResponse({ summary: "맥락 종합", todos: [] }));
+      if (url.endsWith("/api/emails/thread/thread-err")) return Promise.reject(new Error("Thread err"));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={16} />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("대화 흐름을 불러오지 못했습니다.");
+  });
+
+  it("handles retrying to fetch thread", async () => {
+    const email: TestEmail = {
+      id: 17,
+      message_id: "<thread-error2@example.com>",
+      thread_id: "thread-err2",
+      sender: "err@example.com",
+      recipients: "user@example.com",
+      subject: "Err",
+      date: "2026-04-28T10:00:00Z",
+      body: "Err",
+    };
+
+    let callCount = 0;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void init;
+      const url = String(input);
+      if (url.endsWith("/api/emails/17")) return Promise.resolve(jsonResponse(email));
+      if (url.endsWith("/api/llm/summarize")) return Promise.resolve(jsonResponse({ summary: "맥락 종합", todos: [] }));
+      if (url.endsWith("/api/emails/thread/thread-err2")) {
+        callCount++;
+        if (callCount === 1) return Promise.reject(new Error("Thread err"));
+        return Promise.resolve(jsonResponse({ thread: [email] }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={17} />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("대화 흐름을 불러오지 못했습니다.");
+
+    const retryButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (b) => b.textContent?.includes("다시 시도")
+    );
+    await act(async () => {
+      retryButton?.click();
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).not.toContain("대화 흐름을 불러오지 못했습니다.");
+  });
+
+  it("handles errors when context synthesis fails", async () => {
+    const email: TestEmail = {
+      id: 18,
+      message_id: "<summary-error@example.com>",
+      thread_id: null,
+      sender: "err@example.com",
+      recipients: "user@example.com",
+      subject: "Err",
+      date: "2026-04-28T10:00:00Z",
+      body: "Err",
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void init;
+      const url = String(input);
+      if (url.endsWith("/api/emails/18")) return Promise.resolve(jsonResponse(email));
+      if (url.endsWith("/api/llm/summarize")) return Promise.reject(new Error("Summarize failed"));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={18} />);
+    });
+    await act(async () => { await flushAsyncWork(); });
+
+    expect(container.textContent).toContain("맥락 종합을 생성하지 못했습니다.");
+  });
+
+  it("handles errors when loading email details fails", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void init;
+      const url = String(input);
+      if (url.endsWith("/api/emails/19")) return Promise.reject(new Error("Detail failed"));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={19} />);
+    });
+    await act(async () => { await flushAsyncWork(); });
+
+    expect(container.textContent).toContain("메일 내용을 불러오지 못했습니다.");
+  });
+
+  it("handles empty states correctly", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={null} />);
+    });
+    await act(async () => { await flushAsyncWork(); });
+
+    expect(container.textContent).toContain("메일을 선택하세요");
+  });
+
+  it("cleans up draft states explicitly", async () => {
+    const email: TestEmail = {
+      id: 20,
+      message_id: "<cleanup@example.com>",
+      thread_id: null,
+      sender: "cleanup@example.com",
+      recipients: "user@example.com",
+      subject: "Cleanup",
+      date: "2026-04-28T10:00:00Z",
+      body: "Cleanup me",
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void init;
+      const url = String(input);
+      if (url.endsWith("/api/emails/20")) return Promise.resolve(jsonResponse(email));
+      if (url.endsWith("/api/llm/summarize")) return Promise.resolve(jsonResponse({ summary: "맥락 종합", todos: [] }));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={20} />);
+    });
+    await act(async () => { await flushAsyncWork(); });
+
+    const textInput = container.querySelector<HTMLTextAreaElement>('#reply-draft');
+    if (textInput) {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+      setter?.call(textInput, "test draft");
+      textInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    const clearButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (b) => b.textContent?.includes("지우기")
+    );
+    await act(async () => {
+      clearButton?.click();
+    });
+    await act(async () => { await flushAsyncWork(); });
+
+    const draftInput = container.querySelector<HTMLTextAreaElement>('#reply-draft');
+    expect(draftInput?.value).toBe("");
+  });
+
+  it("handles send message success and clear actions", async () => {
+    const email: TestEmail = {
+      id: 21,
+      message_id: "<send-success@example.com>",
+      thread_id: null,
+      sender: "send@example.com",
+      recipients: "user@example.com",
+      subject: "Send",
+      date: "2026-04-28T10:00:00Z",
+      body: "Send me",
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void init;
+      const url = String(input);
+      if (url.endsWith("/api/emails/21")) return Promise.resolve(jsonResponse(email));
+      if (url.endsWith("/api/llm/summarize")) return Promise.resolve(jsonResponse({ summary: "맥락 종합", todos: [] }));
+      if (url.endsWith("/api/emails/send")) return Promise.resolve(jsonResponse({ simulated: true }));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={21} />);
+    });
+    await act(async () => { await flushAsyncWork(); });
+
+    const draftInput = container.querySelector<HTMLTextAreaElement>('#reply-draft');
+    if (draftInput) {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+      setter?.call(draftInput, "This is my draft to send.");
+      draftInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    const sendButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (b) => b.textContent?.includes("답장 보내기")
+    );
+    await act(async () => {
+      sendButton?.click();
+    });
+    await act(async () => { await flushAsyncWork(); });
+
+    expect(container.textContent).toContain("실제 메일은 전송되지 않았습니다");
+    expect(draftInput?.value).toBe("");
+  });
+
+  it("handles send message failure", async () => {
+    const email: TestEmail = {
+      id: 22,
+      message_id: "<send-failure@example.com>",
+      thread_id: null,
+      sender: "send-fail@example.com",
+      recipients: "user@example.com",
+      subject: "Send Fail",
+      date: "2026-04-28T10:00:00Z",
+      body: "Fail me",
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void init;
+      const url = String(input);
+      if (url.endsWith("/api/emails/22")) return Promise.resolve(jsonResponse(email));
+      if (url.endsWith("/api/llm/summarize")) return Promise.resolve(jsonResponse({ summary: "맥락 종합", todos: [] }));
+      if (url.endsWith("/api/emails/send")) return Promise.reject(new Error("Send failed"));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={22} />);
+    });
+    await act(async () => { await flushAsyncWork(); });
+
+    const draftInput = container.querySelector<HTMLTextAreaElement>('#reply-draft');
+    if (draftInput) {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+      setter?.call(draftInput, "This is my draft to send and fail.");
+      draftInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    const sendButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (b) => b.textContent?.includes("답장 보내기")
+    );
+    await act(async () => {
+      sendButton?.click();
+    });
+    await act(async () => { await flushAsyncWork(); });
+
+    expect(container.textContent).toContain("답장 전송에 실패했습니다.");
   });
 });

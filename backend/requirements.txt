@@ -26,9 +26,7 @@ opentelemetry-api==1.42.1
 opentelemetry-sdk==1.42.1
 opentelemetry-instrumentation-fastapi==0.63b1
 opentelemetry-exporter-otlp==1.42.1
-protobuf==5.29.6
-grpcio-status==1.70.0
-
+protobuf==6.33.6
 setuptools==82.0.1
 wheel==0.47.0
 websockets==16.0

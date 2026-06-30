@@ -22,7 +22,13 @@
   them as source can exhaust model context before security evidence finalizes.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
-- Strix Security Scan uses GitHub Models by default through
+- OpenCode Review, Strix Security Scan, and PR Review Merge Scheduler are
+  provided by ContextualWisdomLab central required workflows in
+  `ContextualWisdomLab/.github`; do not reintroduce repo-local copies of
+  `.github/workflows/opencode-review.yml`, `.github/workflows/strix.yml`,
+  `.github/workflows/strix-selftest.yml`, or
+  `.github/workflows/pr-review-merge-scheduler.yml`.
+- The central Strix Security Scan uses GitHub Models by default through
   `STRIX_GITHUB_MODELS_TOKEN`, `STRIX_LLM=openai/gpt-5`, and
   `LLM_API_BASE_FILE` pointing at a trusted file containing
   `https://models.github.ai/inference`; GitHub Models scans must try the
