@@ -824,7 +824,11 @@ export function DataLayout() {
                         aria-busy={isReparseLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
-                        {isReparseLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="size-4" />}
+                        {isReparseLoading ? (
+                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <RefreshCw className="size-4" />
+                        )}
                         {isReparseLoading ? '처리 중' : '재파싱 실행'}
                       </button>
                       <button
@@ -834,7 +838,11 @@ export function DataLayout() {
                         aria-busy={isEmbeddingIntentLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
-                        {isEmbeddingIntentLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Database className="size-4" />}
+                        {isEmbeddingIntentLoading ? (
+                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Database className="size-4" />
+                        )}
                         {isEmbeddingIntentLoading ? '처리 중' : '임베딩 재생성 의도'}
                       </button>
                       <button
@@ -844,7 +852,11 @@ export function DataLayout() {
                         aria-busy={isHwpIntentLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
-                        {isHwpIntentLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <FileText className="size-4" />}
+                        {isHwpIntentLoading ? (
+                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <FileText className="size-4" />
+                        )}
                         {isHwpIntentLoading ? '처리 중' : 'HWP 변환 의도'}
                       </button>
                       <button
@@ -854,7 +866,11 @@ export function DataLayout() {
                         aria-busy={isWebdavMaterializationLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {isWebdavMaterializationLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Server className="size-4" />}
+                        {isWebdavMaterializationLoading ? (
+                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Server className="size-4" />
+                        )}
                         {isWebdavMaterializationLoading ? '실행 중' : 'WebDAV 문서 실행 요청'}
                       </button>
                     </div>

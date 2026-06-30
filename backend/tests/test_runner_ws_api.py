@@ -185,15 +185,25 @@ def test_runner_ws_rejects_missing_auth():
 
 
 def test_runner_ws_route_uses_signed_session_dependency():
-    def get_routes(r):
+    def get_routes(r, inherited_dependencies=()):
+        include_context = getattr(r, "include_context", None)
+        include_dependencies = tuple(
+            getattr(include_context, "dependencies", ()) or ()
+        )
+        effective_dependencies = (*inherited_dependencies, *include_dependencies)
         if hasattr(r, "routes"):
             for child in r.routes:
-                yield from get_routes(child)
-        else:
-            yield r
-    for route in get_routes(app):
+                yield from get_routes(child, effective_dependencies)
+        original_router = getattr(r, "original_router", None)
+        if original_router is not None and hasattr(original_router, "routes"):
+            for child in original_router.routes:
+                yield from get_routes(child, effective_dependencies)
+        if getattr(r, "path", None):
+            route_dependencies = tuple(getattr(r, "dependencies", ()) or ())
+            yield r, (*effective_dependencies, *route_dependencies)
+    for route, route_dependencies in get_routes(app):
         if getattr(route, "path", "") == "/ws/runner/{token}":
-            dependencies = {dependency.dependency for dependency in route.dependencies}
+            dependencies = {dependency.dependency for dependency in route_dependencies}
             assert get_auth_context in dependencies
             return
 
