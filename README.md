@@ -229,6 +229,25 @@ python3 backend/scripts/private_mail_http_smoke.py \
 `/auth/session` 호출 예시를 출력합니다. 위 출력의 JS 한 줄을 앱 콘솔에서 실행하면
 `naruon_session` 쿠키가 갱신되어 API로 임포트한 메일이 브라우저와 동일 세션에서 보입니다.
 
+실제 브라우저 검증 순서:
+
+1) 브라우저에서 `http://127.0.0.1:3000` 접속 후 `"/mail"`로 이동
+2) 방금 입력한 키워드 중 하나로 검색
+3) 결과 목록에서 임포트된 메일을 열어 상세가 정상 표시되는지 확인
+4) `--llm-smoke` 출력에서 `llm=ok`와 `draft=ok`가 있으면 요약/초안 API 응답도 정상
+   - 브라우저에서 동일 이메일을 선택한 뒤 LLM 요약/초안 버튼 동작 확인
+
+백엔드 API를 바로 확인하려면(필요 시):
+
+```bash
+curl -s http://127.0.0.1:3000/api/emails?limit=10
+curl -s -X POST http://127.0.0.1:3000/api/search \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "중공업 전력PU 회의록", "limit": 3}'
+```
+
+세션이 다르게 보이면 `/auth/session` 동기화 콘솔 코드를 다시 실행한 뒤 새로고침 합니다.
+
 What you should see: the fixture import loads a three-message `Quarterly plan`
 conversation. `/api/emails` returns one threaded inbox item with `reply_count`
 greater than 1, and the frontend shows conversation history oldest to newest.
