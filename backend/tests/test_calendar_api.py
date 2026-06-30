@@ -203,7 +203,7 @@ def test_calendar_sync_rejects_unsafe_todo_text_before_writeback(
     response = client.post("/api/calendar/sync", json={"todos": [unsafe_todo]})
 
     assert response.status_code == 422
-    assert response.json() == {"detail": "Invalid or unsafe calendar action item text"}
+    assert response.json() == {"detail": "Invalid or unsafe calendar todo text"}
     mock_create.assert_not_called()
 
 
@@ -221,7 +221,7 @@ def test_calendar_sync_rejects_mixed_batch_before_any_writeback(
     )
 
     assert response.status_code == 422
-    assert response.json() == {"detail": "Invalid or unsafe calendar action item text"}
+    assert response.json() == {"detail": "Invalid or unsafe calendar todo text"}
     mock_create.assert_not_called()
 
 
