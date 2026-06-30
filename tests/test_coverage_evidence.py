@@ -27,7 +27,7 @@ def test_version_file_candidates_include_repository_root():
     assert _version_file_candidates()[0].name == "VERSION"
 
 
-def test_get_release_version_reports_checked_candidates(tmp_path, monkeypatch):
+def test_get_release_version_omits_checked_candidates(tmp_path, monkeypatch):
     missing_candidate = tmp_path / "missing.VERSION"
 
     monkeypatch.setattr(
@@ -35,5 +35,5 @@ def test_get_release_version_reports_checked_candidates(tmp_path, monkeypatch):
         lambda: (missing_candidate,),
     )
 
-    with pytest.raises(RuntimeError, match="release VERSION file is missing; checked:"):
+    with pytest.raises(RuntimeError, match="release VERSION file is missing"):
         get_release_version()

@@ -19,5 +19,4 @@ def get_release_version() -> str:
     for version_file in _version_file_candidates():
         if version_file.exists():
             return version_file.read_text(encoding="utf-8").strip()
-    candidates = ", ".join(str(path) for path in _version_file_candidates())
-    raise RuntimeError(f"release VERSION file is missing; checked: {candidates}")
+    raise RuntimeError("release VERSION file is missing")

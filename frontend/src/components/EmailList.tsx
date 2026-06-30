@@ -223,7 +223,7 @@ export function EmailList({
               type="text"
               inputMode="search"
               role="searchbox"
-              className="h-10 rounded-xl border-input bg-background/80 pl-9 pr-9 shadow-inner shadow-slate-950/[0.02]"
+              className="h-10 rounded-xl border-input bg-background/80 pl-9 pr-9 shadow-inner shadow-slate-950/[0.02] [&::-webkit-search-cancel-button]:hidden"
             />
             {searchQuery && (
               <button
