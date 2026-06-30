@@ -80,6 +80,7 @@ async def execute_prompt_with_llm(
     system_message: str | None = None,
 ) -> dict:
     from openai import AsyncOpenAI
+
     from core.config import settings
 
     validated_base_url, http_client = await build_llm_provider_http_client(base_url)

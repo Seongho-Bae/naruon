@@ -13,7 +13,7 @@ import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-wor
 import { toSafeReactText } from '@/lib/safe-text';
 import { setWorkspaceStartupView, useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 import { MobileCalendarPanel, MobileSearchPanel } from '@/components/mobile-workspace-panels';
-const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
+const RelationContext = dynamic(() => import('@/components/RelationContext'), { ssr: false });
 
 type WorkspaceActionCommand = { id: number; action: string; target: 'desktop' | 'tablet'; modeVersion: number };
 type MobileActionCommand = { id: number; action: string; modeVersion: number };
@@ -882,7 +882,7 @@ export function WorkspaceHome({
                 </div>
               </div>
               <div className="flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-                <NetworkGraph />
+                <RelationContext />
               </div>
             </div>
           </ResizablePanel>
@@ -916,7 +916,7 @@ export function WorkspaceHome({
             <div className="border-t border-border/70 p-4">
               <p className="mb-3 text-xs font-semibold text-muted-foreground">맥락 그래프는 필요할 때 펼쳐서 확인합니다.</p>
               <div className="h-80 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-                <NetworkGraph />
+                <RelationContext />
               </div>
             </div>
           </details>
@@ -982,7 +982,7 @@ export function WorkspaceHome({
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-              {effectiveMobileView === 'actions' && <NetworkGraph />}
+              {effectiveMobileView === 'actions' && <RelationContext />}
             </div>
           </section>
           <section
