@@ -1,4 +1,3 @@
-"""Test configuration and fixtures for the backend."""
 import os
 import secrets
 
@@ -30,7 +29,6 @@ TEST_SCOPED_ROLES = {
 
 
 def _normalize_header_value(value: str | None) -> str | None:
-    """Normalize a header value by stripping whitespace, returning None if empty."""
     if value is None:
         return None
     normalized = value.strip()
@@ -38,7 +36,6 @@ def _normalize_header_value(value: str | None) -> str | None:
 
 
 def _parse_group_ids(group_ids_header: str | None) -> tuple[str, ...]:
-    """Parse a comma-separated list of group IDs from a header."""
     if not group_ids_header:
         return ()
     return tuple(
@@ -47,14 +44,12 @@ def _parse_group_ids(group_ids_header: str | None) -> tuple[str, ...]:
 
 
 def _derive_test_role(requested_role: str | None) -> RoleName:
-    """Derive a RoleName from the requested role string, defaulting to 'member'."""
     if requested_role in TEST_SCOPED_ROLES:
         return cast(RoleName, requested_role)
     return "member"
 
 
 def _derive_workspace_id(user_id: str, organization_id: str | None) -> str:
-    """Derive a workspace ID based on the presence of an organization ID."""
     if organization_id:
         return f"workspace-{organization_id}"
     return f"workspace-{user_id}"
@@ -62,14 +57,12 @@ def _derive_workspace_id(user_id: str, organization_id: str | None) -> str:
 
 @pytest.fixture
 def dev_auth_dependency_overrides():
-    """Fixture to override authentication dependencies for testing."""
     async def test_auth_context(
         x_user_id: str | None = Header(None, alias="X-User-Id"),
         x_user_role: str | None = Header(None, alias="X-User-Role"),
         x_organization_id: str | None = Header(None, alias="X-Organization-Id"),
         x_group_ids: str | None = Header(None, alias="X-Group-Ids"),
     ) -> AuthContext:
-        """Mock dependency to return an AuthContext based on headers."""
         user_id = _normalize_header_value(x_user_id)
         if user_id is None:
             raise HTTPException(status_code=401, detail="Authentication required")
@@ -88,7 +81,6 @@ def dev_auth_dependency_overrides():
         x_organization_id: str | None = Header(None, alias="X-Organization-Id"),
         x_group_ids: str | None = Header(None, alias="X-Group-Ids"),
     ) -> str:
-        """Mock dependency to return the current user's ID based on headers."""
         return (
             await test_auth_context(
                 x_user_id=x_user_id,
