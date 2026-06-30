@@ -45,7 +45,7 @@ def test_ollama_dockerfile_keeps_pulled_models_available_to_runtime_user():
 
     assert (
         "FROM ollama/ollama@sha256:"
-        "bfc9c6d53cc6989aa5131a6fde6b162b2802d4d337657f3253b5f69579bddeee"
+        "c484b703176aa19dfc0a54cbfb60ab8094b38faa04283fb77eba1d33319e5eca"
         in dockerfile
     )
     assert "FROM ollama/ollama:latest\n" not in dockerfile
@@ -82,7 +82,7 @@ def test_backend_requirements_pin_ruff_for_deterministic_ci():
     requirements = (REPO_ROOT / "backend" / "requirements.txt").read_text()
 
     assert "\nruff\n" not in f"\n{requirements}\n"
-    assert "ruff==0.15.18" in requirements
+    assert "ruff==0.15.20" in requirements
 
 
 def test_compose_gateway_services_disable_privilege_escalation():

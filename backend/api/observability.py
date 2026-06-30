@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import AuthContext, get_auth_context, is_admin_role, is_tenant_admin_role
@@ -121,7 +121,9 @@ def _latest_event_time(
     return None
 
 
-def _check_org_admin(auth_context: AuthContext = Depends(get_auth_context)) -> AuthContext:
+def _check_org_admin(
+    auth_context: AuthContext = Depends(get_auth_context),
+) -> AuthContext:
     if not is_admin_role(auth_context.role):
         raise HTTPException(
             status_code=403,
@@ -184,47 +186,52 @@ async def _get_connector_signal_events(
     ]
 
 
-async def _get_writeback_retry_items(
+async def _queue_depth(
     db: AsyncSession,
     organization_id: str,
     workspace_id: str,
-) -> list[ProviderWritebackRetryItem]:
+) -> tuple[QueueDepthState, ProviderWritebackQueueDepth]:
+    # ⚡ Bolt Optimization: Use batched conditional aggregations instead of fetching all retry items to memory.
     result = await db.execute(
-        select(ProviderWritebackRetryItem).where(
+        select(
+            func.count(case((ProviderWritebackRetryItem.retry_state == "pending", 1))),
+            func.count(case((ProviderWritebackRetryItem.retry_state == "running", 1))),
+            func.count(
+                case((ProviderWritebackRetryItem.retry_state.startswith("failed"), 1))
+            ),
+            func.min(
+                case(
+                    (
+                        ProviderWritebackRetryItem.retry_state == "pending",
+                        ProviderWritebackRetryItem.next_retry_at,
+                    )
+                )
+            ),
+        ).where(
             ProviderWritebackRetryItem.organization_id == organization_id,
             ProviderWritebackRetryItem.workspace_id == workspace_id,
         )
     )
-    return list(result.scalars().all())
+    counts = result.one_or_none()
+    pending_count = counts[0] if counts else 0
+    running_count = counts[1] if counts else 0
+    failed_count = counts[2] if counts else 0
+    next_retry_at_min = counts[3] if counts else None
 
-
-def _queue_depth(
-    retry_items: list[ProviderWritebackRetryItem],
-) -> tuple[QueueDepthState, ProviderWritebackQueueDepth]:
-    pending_items = [item for item in retry_items if item.retry_state == "pending"]
-    running_items = [item for item in retry_items if item.retry_state == "running"]
-    failed_items = [
-        item for item in retry_items if item.retry_state.startswith("failed")
-    ]
-    next_retry_candidates = sorted(
-        item.next_retry_at for item in pending_items if item.next_retry_at is not None
-    )
-    total_count = len(pending_items) + len(running_items) + len(failed_items)
-    if failed_items:
+    total_count = pending_count + running_count + failed_count
+    if failed_count:
         state: QueueDepthState = "degraded"
-    elif pending_items or running_items:
+    elif pending_count or running_count:
         state = "backlog"
     else:
         state = "clear"
     return state, ProviderWritebackQueueDepth(
-        pending_count=len(pending_items),
-        running_count=len(running_items),
-        failed_count=len(failed_items),
+        pending_count=pending_count,
+        running_count=running_count,
+        failed_count=failed_count,
         total_count=total_count,
         next_retry_at=(
-            _datetime_to_utc_iso(next_retry_candidates[0])
-            if next_retry_candidates
-            else None
+            _datetime_to_utc_iso(next_retry_at_min) if next_retry_at_min else None
         ),
     )
 
@@ -240,12 +247,12 @@ def _telemetry_runtime() -> TelemetryRuntime:
     )
 
 
-def _connector_state(
+async def _connector_state(
+    db: AsyncSession,
     organization_id: str,
     workspace_id: str,
     config: WorkspaceRunnerConfig | None,
     recent_events: list[ConnectorSignalEventResponse],
-    retry_items: list[ProviderWritebackRetryItem],
 ) -> ConnectorOperationalState:
     manifest = _connector_manifest()
     connection_snapshot = runner_connection_manager.snapshot(
@@ -262,7 +269,10 @@ def _connector_state(
         if config is not None and bool(config.registration_token)
         else "not_registered"
     )
-    queue_depth_state, queue_depth = _queue_depth(retry_items)
+    connector_workspace_id = config.workspace_id if config is not None else workspace_id
+    queue_depth_state, queue_depth = await _queue_depth(
+        db, organization_id, connector_workspace_id
+    )
     return ConnectorOperationalState(
         workspace_id=config.workspace_id if config is not None else workspace_id,
         registration_state=registration_state,
@@ -311,7 +321,9 @@ def _operational_signals(
         OperationalSignal(
             signal_key="connector_heartbeat",
             display_name="Connector heartbeat",
-            state="enabled" if connector.connection_state == "connected" else connector.registration_state,
+            state="enabled"
+            if connector.connection_state == "connected"
+            else connector.registration_state,
             evidence_source="runner WebSocket manager and workspace_runner_configs.registration_token",
             detail="Live heartbeat uses active outbound runner sockets and durable connector_signal_events history.",
         ),
@@ -376,18 +388,13 @@ async def get_operational_signals(
     recent_events = await _get_connector_signal_events(
         db, organization_id, connector_workspace_id
     )
-    retry_items = await _get_writeback_retry_items(
-        db,
-        organization_id,
-        connector_workspace_id,
-    )
     telemetry = _telemetry_runtime()
-    connector = _connector_state(
+    connector = await _connector_state(
+        db,
         organization_id,
         workspace_id,
         config,
         recent_events,
-        retry_items,
     )
     return OperationalSignalsResponse(
         workspace_id=connector.workspace_id,
