@@ -128,6 +128,18 @@ def _auth_context() -> AuthContext:
     )
 
 
+def _app_routes_with_include_dependencies():
+    for route in app.routes:
+        original_router = getattr(route, "original_router", None)
+        include_context = getattr(route, "include_context", None)
+        include_dependencies = getattr(include_context, "dependencies", [])
+        if original_router is None:
+            yield route, ()
+            continue
+        for included_route in original_router.routes:
+            yield included_route, include_dependencies
+
+
 @pytest.fixture(autouse=True)
 def restore_session_secret(monkeypatch):
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
@@ -186,9 +198,12 @@ def test_runner_ws_rejects_missing_auth():
 
 
 def test_runner_ws_route_uses_signed_session_dependency():
-    for route in app.routes:
+    for route, include_dependencies in _app_routes_with_include_dependencies():
         if isinstance(route, APIWebSocketRoute) and route.path == "/ws/runner/{token}":
-            dependencies = {dependency.dependency for dependency in route.dependencies}
+            dependencies = {
+                dependency.dependency
+                for dependency in (*route.dependencies, *include_dependencies)
+            }
             assert get_auth_context in dependencies
             return
 

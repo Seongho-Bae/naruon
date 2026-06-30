@@ -18,6 +18,15 @@ AUTH_HEADERS = {
 }
 
 
+def _app_routes():
+    for route in app.routes:
+        original_router = getattr(route, "original_router", None)
+        if original_router is None:
+            yield route
+            continue
+        yield from original_router.routes
+
+
 class MockScalars:
     def __init__(self, items):
         self.items = items
@@ -82,9 +91,15 @@ def test_dav_rejects_missing_auth():
 
 
 def test_dav_route_uses_signed_session_dependency():
-    for route in app.routes:
-        if isinstance(route, APIRoute) and route.path == "/dav/{path:path}":
-            dependencies = {dependency.dependency for dependency in route.dependencies}
+    assert str(app.url_path_for("dav_handler", path="user123/projects/")) == (
+        "/dav/user123/projects/"
+    )
+
+    for route in _app_routes():
+        if isinstance(route, APIRoute) and route.name == "dav_handler":
+            dependencies = {
+                dependency.call for dependency in route.dependant.dependencies
+            }
             assert get_auth_context in dependencies
             return
 

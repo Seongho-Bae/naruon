@@ -412,6 +412,8 @@ class _PinnedImplicitTlsSMTP(aiosmtplib.SMTP):
 
     def __init__(self, *, tls_server_hostname: str, **kwargs):
         self._tls_server_hostname = tls_server_hostname
+        if kwargs.get("use_tls") and kwargs.get("sock") is not None:
+            kwargs["hostname"] = kwargs.get("hostname") or tls_server_hostname
         super().__init__(**kwargs)
 
     async def _create_connection(self, timeout: float | None):
@@ -467,7 +469,7 @@ def _build_smtp_client(
 ) -> aiosmtplib.SMTP:
     if smtp_port == 465:
         return _PinnedImplicitTlsSMTP(
-            hostname=None,
+            hostname=smtp_server,
             port=None,
             sock=smtp_socket,
             timeout=SMTP_TIMEOUT_SECONDS,
