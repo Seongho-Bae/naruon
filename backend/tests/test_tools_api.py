@@ -241,3 +241,71 @@ def test_execute_tool_sync_handler_success():
     data = response.json()
     assert data["status"] == "success"
     assert data["result"] == {"received": "ok"}
+
+@pytest.mark.asyncio
+async def test_execute_tool_no_handler_registered():
+    from api.tools import ToolInfo
+    try:
+        # Register a tool but deliberately remove its handler to trigger line 53
+        registry._tools["no_handler_tool"] = ToolInfo(
+            code="no_handler_tool",
+            name="No Handler",
+            description="Test tool with no handler",
+            category="Test"
+        )
+        with pytest.raises(ValueError, match="No handler registered for tool no_handler_tool"):
+            await registry.execute("no_handler_tool", {})
+    finally:
+        registry.unregister("no_handler_tool")
+
+
+def test_validate_parameters_not_a_dict():
+    # Trigger line 61
+    with pytest.raises(ValueError, match="Tool parameters must be an object"):
+        registry._validate_parameters("thread_summarizer", ["not", "a", "dict"])
+
+
+def test_validate_parameters_does_not_accept_parameters():
+    from api.tools import ToolInfo
+    try:
+        # Register a tool with no parameters schema
+        registry.register(
+            ToolInfo(
+                code="no_params_tool",
+                name="No Params",
+                description="Takes no params",
+                category="Test",
+                parameters=None
+            ),
+            lambda p: "ok"
+        )
+        # Trigger line 67 by providing parameters to a tool that doesn't accept them
+        with pytest.raises(ValueError, match="Tool does not accept parameters"):
+            registry._validate_parameters("no_params_tool", {"unexpected": "value"})
+
+        # Test line 68 (returns empty dict when params are empty and schema is None)
+        assert registry._validate_parameters("no_params_tool", {}) == {}
+    finally:
+        registry.unregister("no_params_tool")
+
+
+def test_validate_parameters_missing_required_parameter():
+    # Trigger line 77
+    with pytest.raises(ValueError, match="Missing required tool parameter"):
+        # thread_summarizer requires thread_id
+        registry._validate_parameters("thread_summarizer", {})
+
+
+def test_parameter_type_name_dict_descriptor():
+    from api.tools import _parameter_type_name
+    # Trigger line 96, 97
+    assert _parameter_type_name({"type": "integer"}) == "integer"
+    assert _parameter_type_name({"type": "ARRAY"}) == "array"
+    assert _parameter_type_name({}) == "string" # Default to string if type is missing
+
+
+def test_parameter_type_name_fallback():
+    from api.tools import _parameter_type_name
+    # Trigger line 98
+    assert _parameter_type_name(123) == "string"
+    assert _parameter_type_name(None) == "string"
