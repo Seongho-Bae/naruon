@@ -4,11 +4,17 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("lucide-react", () => ({
+  AlertCircle: () => <svg aria-hidden="true" />,
   CheckIcon: () => <svg aria-hidden="true" />,
+  CheckCircle2: () => <svg aria-hidden="true" />,
   Code: () => <svg aria-hidden="true" />,
+  FileText: () => <svg aria-hidden="true" />,
   Loader2: () => <svg aria-hidden="true" data-testid="loader" />,
   Play: () => <svg aria-hidden="true" />,
   Save: () => <svg aria-hidden="true" />,
+  Share2: () => <svg aria-hidden="true" />,
+  Sparkles: () => <svg aria-hidden="true" />,
+  Variable: () => <svg aria-hidden="true" />,
 }));
 
 import PromptStudioPage from "./page";
@@ -43,6 +49,17 @@ function getButton(container: HTMLElement, label: string) {
   );
   expect(button).toBeInstanceOf(HTMLButtonElement);
   return button as HTMLButtonElement;
+}
+
+function setControlValue(control: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const prototype = control instanceof HTMLTextAreaElement
+    ? window.HTMLTextAreaElement.prototype
+    : window.HTMLInputElement.prototype;
+  const valueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+  act(() => {
+    valueSetter?.call(control, value);
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+  });
 }
 
 function lowerCaseHeaders(headers: HeadersInit | undefined) {
@@ -111,7 +128,7 @@ describe("PromptStudioPage", () => {
       "prompt-title",
       "prompt-description",
       "prompt-content",
-      "test-variable",
+      "prompt-variable-email",
       "is_shared",
     ]) {
       expect(page.querySelector(`#${fieldId}`)).not.toBeNull();
@@ -158,8 +175,8 @@ describe("PromptStudioPage", () => {
     const promptSave = deferred<Response>();
     const fetchMock = vi.fn(() => promptSave.promise);
     vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("alert", vi.fn());
     const page = await renderPage();
+    setControlValue(page.querySelector<HTMLInputElement>("#prompt-title")!, "맥락 종합 프롬프트");
 
     act(() => {
       getButton(page, "프롬프트 저장 (Save)").click();
@@ -179,8 +196,8 @@ describe("PromptStudioPage", () => {
       "/api/prompts",
       expect.objectContaining({
         body: JSON.stringify({
-          title: "",
-          description: "",
+          title: "맥락 종합 프롬프트",
+          description: null,
           content: "핵심 맥락을 종합해주세요: {{email}}",
           is_shared: false,
         }),
@@ -189,5 +206,19 @@ describe("PromptStudioPage", () => {
       }),
     );
     expectNoPublicIdentityHeaders((fetchMock.mock.calls[0] as unknown as [RequestInfo, RequestInit?])?.[1]?.headers);
+    expect(page.textContent).toContain("AI 허브에서 실행 후보와 평가 근거로 연결됩니다.");
+  });
+
+  it("blocks save before required prompt metadata is present", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const page = await renderPage();
+
+    act(() => {
+      getButton(page, "프롬프트 저장 (Save)").click();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(page.querySelector("[role='alert']")?.textContent).toContain("프롬프트 이름을 입력하세요.");
   });
 });
