@@ -120,19 +120,23 @@ def thread_requires_reply(
 
 
 async def check_missing_replies(
-    session: AsyncSession, user_id: str, organization_id: str | None
+    session: AsyncSession,
+    user_id: str,
+    organization_id: str | None,
+    tenant_config: TenantConfig | None = None,
 ) -> list[Email]:
     """
     Checks for sent emails that expect a reply but haven't received one.
     Returns a list of such emails.
     """
     # Find user's own email address
-    config = await get_scoped_tenant_config(
-        session,
-        user_id,
-        organization_id,
-    )
-    user_addresses = configured_email_addresses(config)
+    if tenant_config is None:
+        tenant_config = await get_scoped_tenant_config(
+            session,
+            user_id,
+            organization_id,
+        )
+    user_addresses = configured_email_addresses(tenant_config)
 
     if not user_addresses:
         logger.info(f"Cannot track replies for {user_id} - no SMTP username configured")

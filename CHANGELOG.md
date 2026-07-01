@@ -6,8 +6,10 @@
 
 ### 코드 건강성 개선 (Code Health)
 
+- `WorkspaceHome`의 작업 완료 토글과 Reply SLA 팔로업 생성 로직을 `useTasks` hook으로 분리하고, 화면 쪽 formatter를 주입해 작업 제목 정규화 로직 중복을 방지했습니다.
 - `backend/api/security.py`에서 사용하지 않는 `from __future__ import annotations` 구문을 제거하고 조건 표현식을 정리했습니다.
 - `backend/alembic/env.py`에서 사용하지 않는 `from __future__ import annotations` 구문을 제거해 Alembic 환경 설정 코드를 간결하게 정리했습니다.
+- `_import_single_eml`의 embedding 생성과 `Email`/attachment 객체 생성을 헬퍼 함수로 분리해 email import 서비스의 복잡도를 낮췄습니다.
 - `backend/tests/test_tenant_config_api.py` 내의 `test_create_read_pop3_postgres_smoke` 함수의 복잡한 설정 로직을 `pytest` fixture로 분리하여 코드 가독성과 유지보수성을 개선했습니다.
 - `backend/tests/test_webdav_api.py`의 복잡한 PostgreSQL smoke 테스트 설정을 재사용 가능한 DB 연결 확인 헬퍼와 인증/DB 클라이언트 컨텍스트 매니저로 분리했습니다.
 - `backend/tests/test_release_governance.py`의 복잡한 Strix 실패 체크 리뷰 테스트를 명확한 작은 테스트 단위로 분리하여 유지보수성을 개선했습니다.
@@ -16,6 +18,7 @@
 
 - `is_llm_provider_configured`가 `provider_type=None`, 공백-only `base_url`, 공백-only `model_identifier` 입력을 처리하는 엣지 케이스 테스트를 추가했습니다.
 - `thread_group_key`가 `thread_id`와 `message_id`를 trim한 뒤 `coalesce`하는 SQL 표현식을 생성하는지 직접 검증하는 단위 테스트를 추가했습니다.
+- `process_search_results`가 중복 제거, limit, snippet truncation, `None` fallback을 안정적으로 처리하는지 검증하는 단위 테스트를 추가했습니다.
 - `build_reply_counts_subquery`가 `user_id`와 `organization_id` 필터를 SQLAlchemy 쿼리에 올바르게 적용하는지 검증하는 단위 테스트를 추가했습니다.
 
 ### 테스트 개선 (Testing)
@@ -27,6 +30,7 @@
 - `get_emails` API 응답 속도 개선. Python 3.7+ 이상의 딕셔너리 삽입 순서 보장 특성을 활용하여, 불필요한 배열 뒤집기(`reverse()`)와 2차 정렬(`O(N log N)`) 작업을 제거하였습니다. 이를 통해 API 응답 속도와 메모리 사용량을 최적화했습니다.
 - Google Calendar batch writeback을 chunk별 독립 service와 `asyncio.gather()`로 병렬 실행해 여러 배치를 생성할 때의 전체 대기 시간을 줄였습니다.
 - DataLayout의 WebDAV 계정과 repository/asset 파생 상태 계산을 `useMemo`로 묶어 반복 렌더링 중 불필요한 배열 순회를 줄였습니다.
+- Reply SLA scheduler가 이미 조회한 `TenantConfig`를 하위 reply tracking 경로로 전달해 mailbox owner별 tenant config 재조회 N+1 쿼리를 제거했습니다.
 - `sync_webdav_folders`가 WebDAV 계정 유효성 검증과 로깅에 필요한 `server_url`, `source_uid` 컬럼만 조회하도록 개선하여 불필요한 ORM 객체 로드와 암호화 필드 처리를 줄였습니다.
 - Reply SLA fallback 에스컬레이션에서 bulk insert 충돌 시 기존 task를 한 번에 조회해 중복 항목을 제거하고 남은 task를 재차 bulk insert하도록 개선하여 N+1 insert 재시도 병목을 줄였습니다.
 

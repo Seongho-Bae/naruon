@@ -364,3 +364,43 @@ def test_build_reply_counts_subquery_with_user_and_org_id():
         in sql
     )
     assert "group by coalesce" in sql
+
+
+def test_process_search_results_deduplicates_and_applies_limit():
+    from api.search import process_search_results
+
+    rows = [
+        MockRow(1, "First", "sender@example.com", "First body", 1.0),
+        MockRow(1, "Duplicate", "sender@example.com", "Duplicate body", 0.9),
+        MockRow(2, "Second", "sender@example.com", "Second body", 0.8),
+        MockRow(3, "Third", "sender@example.com", "Third body", 0.7),
+    ]
+
+    results = process_search_results(rows, limit=2)
+
+    assert [item.id for item in results] == [1, 2]
+    assert results[0].subject == "First"
+    assert results[0].snippet == "First body"
+
+
+def test_process_search_results_truncates_long_snippets():
+    from api.search import process_search_results
+
+    rows = [MockRow(1, "Long", "sender@example.com", "A" * 300, 1.0)]
+
+    results = process_search_results(rows, limit=10)
+
+    assert results[0].snippet == ("A" * 200) + "..."
+
+
+def test_process_search_results_applies_none_fallbacks():
+    from api.search import process_search_results
+
+    row = MockRow(1, "Fallbacks", "sender@example.com", None, None)
+    row.reply_count = None
+
+    results = process_search_results([row], limit=10)
+
+    assert results[0].snippet == ""
+    assert results[0].score == 0.0
+    assert results[0].reply_count == 1
