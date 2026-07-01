@@ -23,6 +23,7 @@
 
 - `get_emails` API 응답 속도 개선. Python 3.7+ 이상의 딕셔너리 삽입 순서 보장 특성을 활용하여, 불필요한 배열 뒤집기(`reverse()`)와 2차 정렬(`O(N log N)`) 작업을 제거하였습니다. 이를 통해 API 응답 속도와 메모리 사용량을 최적화했습니다.
 - `sync_webdav_folders`가 WebDAV 계정 유효성 검증과 로깅에 필요한 `server_url`, `source_uid` 컬럼만 조회하도록 개선하여 불필요한 ORM 객체 로드와 암호화 필드 처리를 줄였습니다.
+- Reply SLA fallback 에스컬레이션에서 bulk insert 충돌 시 기존 task를 한 번에 조회해 중복 항목을 제거하고 남은 task를 재차 bulk insert하도록 개선하여 N+1 insert 재시도 병목을 줄였습니다.
 
 ### 보안 패치 (Security)
 
