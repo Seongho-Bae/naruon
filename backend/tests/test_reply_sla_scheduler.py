@@ -43,7 +43,7 @@ async def test_reply_sla_scheduler_escalates_configured_mailbox_owners(monkeypat
     session = MockSession()
 
     async def fake_create_reply_sla_escalation_tasks(
-        db, *, user_id, organization_id, overdue_hours, limit
+        db, *, user_id, organization_id, overdue_hours, limit, tenant_config
     ):
         calls.append(
             {
@@ -52,6 +52,7 @@ async def test_reply_sla_scheduler_escalates_configured_mailbox_owners(monkeypat
                 "organization_id": organization_id,
                 "overdue_hours": overdue_hours,
                 "limit": limit,
+                "tenant_config": tenant_config,
             }
         )
 
@@ -75,6 +76,7 @@ async def test_reply_sla_scheduler_escalates_configured_mailbox_owners(monkeypat
             "organization_id": "org-acme",
             "overdue_hours": 24,
             "limit": 7,
+            "tenant_config": calls[0]["tenant_config"],
         },
         {
             "db": session,
@@ -82,8 +84,11 @@ async def test_reply_sla_scheduler_escalates_configured_mailbox_owners(monkeypat
             "organization_id": "org-beta",
             "overdue_hours": 24,
             "limit": 7,
+            "tenant_config": calls[1]["tenant_config"],
         },
     ]
+    assert calls[0]["tenant_config"].smtp_username == "alice@example.com"
+    assert calls[1]["tenant_config"].imap_username == "bob@example.com"
 
 
 @pytest.mark.asyncio
@@ -114,7 +119,7 @@ async def test_reply_sla_scheduler_continues_after_owner_escalation_failure(
             return MockResult()
 
     async def fake_create_reply_sla_escalation_tasks(
-        db, *, user_id, organization_id, overdue_hours, limit
+        db, *, user_id, organization_id, overdue_hours, limit, tenant_config
     ):
         calls.append(user_id)
         if user_id == "alice":

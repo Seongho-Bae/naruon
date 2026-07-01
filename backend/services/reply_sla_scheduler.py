@@ -78,24 +78,19 @@ class ReplySlaScheduler:
             )
             configs = result.scalars().all()
 
-            tasks = []
             for config in configs:
-                tasks.append(
-                    create_reply_sla_escalation_tasks(
+                try:
+                    await create_reply_sla_escalation_tasks(
                         session,
                         user_id=config.user_id,
                         organization_id=config.organization_id,
                         overdue_hours=self.overdue_hours,
                         limit=self.limit,
+                        tenant_config=config,
                     )
-                )
-
-            if tasks:
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-                for config, result in zip(configs, results):
-                    if isinstance(result, Exception):
-                        logger.error(
-                            "Overdue reply follow-up failed for configured owner %s.",
-                            config.user_id,
-                            exc_info=result,
-                        )
+                except Exception:
+                    logger.error(
+                        "Overdue reply follow-up failed for configured owner %s.",
+                        config.user_id,
+                        exc_info=True,
+                    )
