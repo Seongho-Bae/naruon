@@ -18,11 +18,19 @@ def _clear_runtime_settings(monkeypatch) -> None:
         monkeypatch.delenv(setting_name, raising=False)
 
 
-def _patch_oidc_dns(monkeypatch, address: str) -> None:
+def _patch_oidc_dns(monkeypatch, address: str | dict[str, list[str]]) -> None:
+    addresses_by_host = (
+        {"login.example.test": [address]} if isinstance(address, str) else address
+    )
+
     def fake_getaddrinfo(host: str, port: int, *args, **kwargs):
-        if host != "login.example.test":
+        addresses = addresses_by_host.get(host)
+        if addresses is None:
             raise socket.gaierror(f"test DNS blocked for {host}")
-        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, port))]
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", (resolved_address, port))
+            for resolved_address in addresses
+        ]
 
     monkeypatch.setattr("core.url_validation.socket.getaddrinfo", fake_getaddrinfo)
 
@@ -123,6 +131,33 @@ def test_start_backend_rejects_untrusted_oidc_jwks_host(monkeypatch, tmp_path):
 
     assert start_backend.validate_runtime_settings() == [
         "OIDC_JWKS_URL host must be listed in ALLOWED_OIDC_HOSTS"
+    ]
+
+
+def test_start_backend_rejects_oidc_jwks_host_outside_issuer_domain(
+    monkeypatch, tmp_path
+):
+    _clear_runtime_settings(monkeypatch)
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+    )
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", secrets.token_urlsafe(48))
+    monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.test/realms/naruon")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://jwks.example.test/realms/naruon/jwks")
+    monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "login.example.test,jwks.example.test")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.chdir(tmp_path)
+    _patch_oidc_dns(
+        monkeypatch,
+        {
+            "login.example.test": ["93.184.216.34"],
+            "jwks.example.test": ["93.184.216.34"],
+        },
+    )
+
+    assert start_backend.validate_runtime_settings() == [
+        "OIDC_JWKS_URL host must match or be a subdomain of OIDC_ISSUER_URL host"
     ]
 
 

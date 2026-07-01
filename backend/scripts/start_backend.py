@@ -11,7 +11,11 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from core.runtime_secrets import validate_auth_session_hmac_secret_value  # noqa: E402
-from core.url_validation import parse_allowed_hosts, validate_https_url_host  # noqa: E402
+from core.url_validation import (  # noqa: E402
+    parse_allowed_hosts,
+    validate_https_url_host_details,
+    validate_same_or_subdomain_host,
+)
 
 DEFAULT_SERVER_HOST = "127.0.0.1"
 DEFAULT_SERVER_PORT = 8000
@@ -95,13 +99,33 @@ def validate_runtime_settings() -> list[str]:
                 "ALLOWED_OIDC_HOSTS must list trusted OIDC issuer and JWKS hosts"
             )
         else:
-            for setting_name in ("OIDC_ISSUER_URL", "OIDC_JWKS_URL"):
+            issuer_url = None
+            jwks_url = None
+            try:
+                issuer_url = validate_https_url_host_details(
+                    "OIDC_ISSUER_URL",
+                    values["OIDC_ISSUER_URL"],
+                    allowed_oidc_hosts,
+                    "ALLOWED_OIDC_HOSTS",
+                )
+            except ValueError as exc:
+                messages.append(str(exc))
+            try:
+                jwks_url = validate_https_url_host_details(
+                    "OIDC_JWKS_URL",
+                    values["OIDC_JWKS_URL"],
+                    allowed_oidc_hosts,
+                    "ALLOWED_OIDC_HOSTS",
+                )
+            except ValueError as exc:
+                messages.append(str(exc))
+            if issuer_url is not None and jwks_url is not None:
                 try:
-                    validate_https_url_host(
-                        setting_name,
-                        values[setting_name],
-                        allowed_oidc_hosts,
-                        "ALLOWED_OIDC_HOSTS",
+                    validate_same_or_subdomain_host(
+                        "OIDC_JWKS_URL",
+                        jwks_url.hostname,
+                        "OIDC_ISSUER_URL",
+                        issuer_url.hostname,
                     )
                 except ValueError as exc:
                     messages.append(str(exc))
