@@ -1,4 +1,6 @@
-export const calendarDefinitions = [
+import type { CalendarCandidateEvent, CalendarDefinition, CalendarMonthEvent, CalendarWeekEvent } from './types';
+
+export const calendarDefinitions: CalendarDefinition[] = [
   { id: 'personal', name: '김나루 (나)', colorClass: 'bg-primary' },
   { id: 'pm-team', name: 'Naruon PM 팀', colorClass: 'bg-red-500' },
   { id: 'product-team', name: '제품 개발팀', colorClass: 'bg-green-500' },
@@ -7,7 +9,7 @@ export const calendarDefinitions = [
   { id: 'holiday', name: '공휴일', colorClass: 'bg-slate-400' },
 ];
 
-export const calendarMonthEvents = [
+export const calendarMonthEvents: CalendarMonthEvent[] = [
   {
     id: 'product-review',
     calendarId: 'product-team',
@@ -40,7 +42,7 @@ export const calendarMonthEvents = [
   },
 ];
 
-export const calendarWeekEvents = [
+export const calendarWeekEvents: CalendarWeekEvent[] = [
   { id: 'week-product-review', calendarId: 'product-team', day: '월', title: '제품 리뷰', source: '제품 개발팀' },
   { id: 'week-partner-meeting', calendarId: 'personal', day: '화', title: '파트너 미팅 후보', source: '김나루 (나)' },
   { id: 'week-resource-review', calendarId: 'company', day: '수', title: '리소스 배정 검토', source: '회사 공용' },
@@ -48,7 +50,7 @@ export const calendarWeekEvents = [
   { id: 'week-marketing-kickoff', calendarId: 'marketing', day: '금', title: '마케팅 캠페인 오프', source: '마케팅팀' },
 ];
 
-export const calendarCandidateEvents = [
+export const calendarCandidateEvents: CalendarCandidateEvent[] = [
   { id: 'candidate-partner', calendarId: 'personal', title: '파트너 미팅 일정 확정', source: '김나루 (나)', mode: '새 일정 반영 의도' },
   { id: 'candidate-launch', calendarId: 'pm-team', title: '출시 회의 시간 변경', source: 'Naruon PM 팀', mode: '충돌 검사 후 변경 의도' },
   { id: 'candidate-company', calendarId: 'company', title: '개인 메일에서 발견된 회사 일정', source: '회사 공용', mode: '원본 재지정 검토' },

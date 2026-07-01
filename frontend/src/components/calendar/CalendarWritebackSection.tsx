@@ -1,5 +1,4 @@
-import React from 'react';
-import { CalendarWritebackSource, CalendarWritebackIntentResponse, WritebackStatus } from './types';
+import type { CalendarWritebackSource, CalendarWritebackIntentResponse, WritebackStatus } from './types';
 import { getCalendarSourceLabel, getProtocolLabel, getCapabilityLabel, getEtagLabel, getWritebackModeLabel, getIntentProtocolLabel, getProviderExecutionLabel, getProviderRetryLabel } from './helpers';
 
 type Props = {

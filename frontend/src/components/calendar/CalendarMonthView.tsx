@@ -1,7 +1,10 @@
-import React from 'react';
+import type { CalendarMonthEvent } from './types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function CalendarMonthView({ visibleMonthEvents }: { visibleMonthEvents: Record<string, any>[] }) {
+type Props = {
+  visibleMonthEvents: CalendarMonthEvent[];
+};
+
+export function CalendarMonthView({ visibleMonthEvents }: Props) {
   return (
     <div className="h-full rounded-2xl border border-border bg-card shadow-sm flex flex-col overflow-hidden">
       <div className="grid grid-cols-7 border-b border-border bg-secondary/50 text-center text-sm font-semibold py-3">

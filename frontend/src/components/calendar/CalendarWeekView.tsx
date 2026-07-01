@@ -1,7 +1,10 @@
-import React from 'react';
+import type { CalendarWeekEvent } from './types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function CalendarWeekView({ visibleWeekEvents }: { visibleWeekEvents: Record<string, any>[] }) {
+type Props = {
+  visibleWeekEvents: CalendarWeekEvent[];
+};
+
+export function CalendarWeekView({ visibleWeekEvents }: Props) {
   return (
     <section aria-label="주간 캘린더" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <h3 className="text-lg font-bold">주간 캘린더</h3>

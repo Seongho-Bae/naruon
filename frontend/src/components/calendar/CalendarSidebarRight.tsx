@@ -1,9 +1,12 @@
-import React from 'react';
 import { Clock, Video, Users, CalendarDays, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import type { CalendarDetailEvent } from './types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function CalendarSidebarRight({ selectedDetailEvent }: { selectedDetailEvent: Record<string, any> | null }) {
+type Props = {
+  selectedDetailEvent: CalendarDetailEvent | null;
+};
+
+export function CalendarSidebarRight({ selectedDetailEvent }: Props) {
   return (
     <aside className="w-[340px] shrink-0 flex-col overflow-y-auto border-l border-border bg-card p-5 hidden xl:flex">
       <div className="flex items-center justify-between">

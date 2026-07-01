@@ -1,5 +1,3 @@
-import React from 'react';
-
 export function CalendarCoordinationView() {
   return (
     <div className="flex h-full flex-col gap-4">

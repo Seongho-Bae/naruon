@@ -1,7 +1,10 @@
-import React from 'react';
+import type { CalendarDetailEvent } from './types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function CalendarDetailView({ selectedDetailEvent }: { selectedDetailEvent: Record<string, any> | null }) {
+type Props = {
+  selectedDetailEvent: CalendarDetailEvent | null;
+};
+
+export function CalendarDetailView({ selectedDetailEvent }: Props) {
   return (
     <section aria-label="일정 상세" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <h3 className="text-lg font-bold">{selectedDetailEvent ? `${selectedDetailEvent.title} 상세` : '일정 상세'}</h3>

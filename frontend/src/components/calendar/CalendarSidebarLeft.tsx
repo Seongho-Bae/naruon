@@ -1,4 +1,3 @@
-import React from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { calendarDefinitions } from './constants';
@@ -21,7 +20,7 @@ export function CalendarSidebarLeft({ calendarVisibility, toggleCalendarVisibili
         </div>
         <ul className="space-y-3">
           {calendarDefinitions.map((cal) => (
-            <li key={cal.name} className="text-sm">
+            <li key={cal.id} className="text-sm">
               <label className="flex cursor-pointer items-center gap-3 group">
                 <input
                   type="checkbox"

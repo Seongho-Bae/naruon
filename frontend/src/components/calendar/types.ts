@@ -27,3 +27,43 @@ export type CalendarWritebackSource = {
 };
 
 export type WritebackStatus = 'idle' | 'loading' | 'success' | 'no_source' | 'conflict' | 'auth' | 'error';
+
+export type CalendarDefinition = {
+  id: string;
+  name: string;
+  colorClass: string;
+};
+
+export type CalendarMonthEvent = {
+  id: string;
+  calendarId: string;
+  dayIndex: number;
+  time: string;
+  title: string;
+  source: string;
+  description: string;
+  monthClassName: string;
+  dotClassName: string;
+  badgeClassName: string;
+  badgeLabel: string;
+  duration: string;
+  location: string;
+};
+
+export type CalendarWeekEvent = {
+  id: string;
+  calendarId: string;
+  day: string;
+  title: string;
+  source: string;
+};
+
+export type CalendarCandidateEvent = {
+  id: string;
+  calendarId: string;
+  title: string;
+  source: string;
+  mode: string;
+};
+
+export type CalendarDetailEvent = CalendarMonthEvent;

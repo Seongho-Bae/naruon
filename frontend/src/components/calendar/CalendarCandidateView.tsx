@@ -1,7 +1,10 @@
-import React from 'react';
+import type { CalendarCandidateEvent } from './types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function CalendarCandidateView({ visibleCandidateEvents }: { visibleCandidateEvents: Record<string, any>[] }) {
+type Props = {
+  visibleCandidateEvents: CalendarCandidateEvent[];
+};
+
+export function CalendarCandidateView({ visibleCandidateEvents }: Props) {
   return (
     <section aria-label="일정 후보" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <h3 className="text-lg font-bold">일정 후보</h3>
