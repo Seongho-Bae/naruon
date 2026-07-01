@@ -30,7 +30,7 @@
 - Reply SLA scheduler가 이미 조회한 `TenantConfig`를 하위 reply tracking 경로로 전달해 mailbox owner별 tenant config 재조회 N+1 쿼리를 제거했습니다.
 - `sync_webdav_folders`가 WebDAV 계정 유효성 검증과 로깅에 필요한 `server_url`, `source_uid` 컬럼만 조회하도록 개선하여 불필요한 ORM 객체 로드와 암호화 필드 처리를 줄였습니다.
 - Reply SLA fallback 에스컬레이션에서 bulk insert 충돌 시 기존 task를 한 번에 조회해 중복 항목을 제거하고 남은 task를 재차 bulk insert하도록 개선하여 N+1 insert 재시도 병목을 줄였습니다.
-- `ImapSyncWorker`에서 `TenantConfig` 로드 시 발생할 수 있는 N+1 Lazy Loading 문제를 방지하기 위해 `selectinload('*')` 옵션을 쿼리에 추가했습니다.
+- `ImapSyncWorker`가 동기화에 필요한 `TenantConfig` 스칼라 필드만 세션 안에서 materialize하도록 변경해 세션 종료 후 ORM lazy-load 위험과 불필요한 객체 로드를 줄였습니다.
 
 ### 보안 패치 (Security)
 
