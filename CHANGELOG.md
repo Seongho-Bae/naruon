@@ -15,6 +15,7 @@
 ### 테스트 개선 (Testing)
 
 - `thread_group_key`가 `thread_id`와 `message_id`를 trim한 뒤 `coalesce`하는 SQL 표현식을 생성하는지 직접 검증하는 단위 테스트를 추가했습니다.
+- `process_search_results`가 중복 제거, limit, snippet truncation, `None` fallback을 안정적으로 처리하는지 검증하는 단위 테스트를 추가했습니다.
 - `build_reply_counts_subquery`가 `user_id`와 `organization_id` 필터를 SQLAlchemy 쿼리에 올바르게 적용하는지 검증하는 단위 테스트를 추가했습니다.
 
 ### 테스트 개선 (Testing)
