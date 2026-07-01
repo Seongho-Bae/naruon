@@ -77,10 +77,10 @@ function deferred<T>(): Deferred<T> {
 }
 
 function jsonResponse(body: unknown) {
-  return {
-    ok: true,
-    json: async () => body,
-  };
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 async function flushAsyncWork() {
@@ -111,6 +111,88 @@ describe("EmailDetail", () => {
     container?.remove();
     container = null;
     vi.unstubAllGlobals();
+  });
+
+  it("translates email content when the Translate button is clicked", async () => {
+    const translation = deferred<Response>();
+
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.endsWith("/api/emails/1")) {
+        return jsonResponse({
+          id: 1,
+          subject: "Test Subject",
+          sender: "test@example.com",
+          body: "Hello World",
+          date: "2026-05-18T10:00:00Z",
+          thread_id: "thread-1",
+        });
+      }
+      if (url.endsWith("/api/llm/summarize")) {
+        return jsonResponse({ summary: "Summary", todos: [] });
+      }
+      if (url.endsWith("/api/llm/translate")) {
+        return translation.promise;
+      }
+      return jsonResponse({});
+    }));
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => { root?.render(<EmailDetail emailId={1} />); });
+    await flushAsyncWork();
+
+    const translateButton = Array.from(container?.querySelectorAll("button") || []).find((button) => button.textContent?.includes("번역"));
+    expect(translateButton).toBeDefined();
+
+    act(() => { translateButton?.click(); });
+
+    await act(async () => {
+      translation.resolve(jsonResponse({ translation: "<script>alert(1)</script>안녕하세요 세계" }));
+      await translation.promise;
+    });
+    await flushAsyncWork();
+
+    expect(container?.textContent).toContain("한국어 번역 결과");
+    expect(container?.textContent).toContain("안녕하세요 세계");
+    expect(container?.textContent).not.toContain("alert(1)");
+    expect(container?.querySelector("script")).toBeNull();
+  });
+
+  it("handles translation errors gracefully", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.endsWith("/api/emails/1")) {
+        return jsonResponse({
+          id: 1,
+          subject: "Test Subject",
+          sender: "test@example.com",
+          body: "Hello World",
+          date: "2026-05-18T10:00:00Z",
+          thread_id: "thread-1",
+        });
+      }
+      if (url.endsWith("/api/llm/summarize")) {
+        return jsonResponse({ summary: "Summary", todos: [] });
+      }
+      if (url.endsWith("/api/llm/translate")) {
+        return new Response("Internal Server Error", { status: 500 });
+      }
+      return jsonResponse({});
+    }));
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => { root?.render(<EmailDetail emailId={1} />); });
+    await flushAsyncWork();
+
+    const translateButton = Array.from(container?.querySelectorAll("button") || []).find((button) => button.textContent?.includes("번역"));
+    expect(translateButton).toBeDefined();
+
+    act(() => { translateButton?.click(); });
+    await flushAsyncWork();
+
+    expect(container?.textContent).toContain("번역을 수행하지 못했습니다.");
   });
 
   it("renders untrusted detail fields as plain display text without markup", async () => {

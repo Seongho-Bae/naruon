@@ -64,9 +64,12 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
   const [threadError, setThreadError] = useState<string | null>(null);
 
   const [draft, setDraft] = useState<string>('');
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translationError, setTranslationError] = useState<string | null>(null);
   const [isDrafting, setIsDrafting] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  
+
   const [draftError, setDraftError] = useState<string | null>(null);
   const [sendStatus, setSendStatus] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const [instruction, setInstruction] = useState('정중하게 답장해줘');
@@ -119,7 +122,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
 
   useEffect(() => {
     if (!emailId) return;
-    
+
     let isMounted = true;
 
     const fetchData = async () => {
@@ -132,6 +135,9 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
       setLlmData(null);
       setLlmError(null);
       setDraft('');
+      setTranslation(null);
+      setTranslationError(null);
+      setIsTranslating(false);
       setDraftError(null);
       setSendStatus(null);
       setIsDrafting(false);
@@ -143,7 +149,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
 
       try {
         const emailJson = await apiClient.get<EmailData>(`/api/emails/${emailId}`);
-        
+
         if (!isMounted) return;
         setEmail(emailJson);
         setLoading(false); // Stop loading immediately so the user can read the email
@@ -177,6 +183,25 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
 
     return () => { isMounted = false; };
   }, [emailId, fetchThread]);
+
+  const handleTranslate = useCallback(async () => {
+    if (!email) return;
+    const actionEmailId = email.id;
+    const isCurrentEmail = () => currentEmailIdRef.current === actionEmailId;
+    setIsTranslating(true);
+    setTranslationError(null);
+    try {
+      const data = await apiClient.post<{ translation: string }>('/api/llm/translate', { email_body: email.body, target_language: 'Korean' });
+      if (!isCurrentEmail()) return;
+      setTranslation(data.translation || null);
+    } catch (err) {
+      if (!isCurrentEmail()) return;
+      console.error("Error translating email:", err);
+      setTranslationError("번역을 수행하지 못했습니다.");
+    } finally {
+      if (isCurrentEmail()) setIsTranslating(false);
+    }
+  }, [email]);
 
   const handleDraftReply = useCallback(async () => {
     if (!email) return;
@@ -334,7 +359,20 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
             <AvatarFallback>{safeEmailSender ? safeEmailSender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
           </Avatar>
           <div className="grid min-w-0 flex-1 gap-1">
-            <div className="break-words text-lg font-black tracking-tight text-foreground xl:text-xl">{safeEmailSubject}</div>
+            <div className="flex items-start justify-between gap-4 w-full">
+              <div className="break-words text-lg font-black tracking-tight text-foreground xl:text-xl">{safeEmailSubject}</div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTranslate}
+                disabled={isTranslating}
+                aria-busy={isTranslating}
+                className="shrink-0 rounded-xl px-3 h-8 text-xs font-bold shadow-sm"
+              >
+                {isTranslating && <Loader2 className="mr-2 h-3 w-3 animate-spin" aria-hidden="true" />}
+                {isTranslating ? "번역 중" : "번역"}
+              </Button>
+            </div>
             <div className="line-clamp-1 text-xs">
               <span className="text-muted-foreground">{safeEmailSender}</span>
             </div>
@@ -358,7 +396,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
       <Separator />
       <ScrollArea className="flex-1">
         <div className="flex flex-col gap-6 bg-background/50 p-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
-          
+
           <DecisionPointCard
             title="맥락 종합"
             icon={<span aria-hidden="true">✦</span>}
@@ -445,7 +483,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
           </DecisionPointCard>
 
           <Separator />
-          
+
           <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -484,6 +522,17 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     </div>
                   </div>
                   {msg.id === email.id && <Badge variant="outline" className="mb-2 border-primary/30 text-[10px] text-primary">선택된 메시지</Badge>}
+                  {msg.id === email.id && translationError && (
+                    <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                      {translationError}
+                    </div>
+                  )}
+                  {msg.id === email.id && translation && (
+                    <div className="mb-6 rounded-2xl bg-secondary/40 p-4 border border-border">
+                      <p className="text-xs font-bold text-primary mb-2">한국어 번역 결과</p>
+                      <div className="text-sm leading-6 whitespace-pre-wrap">{toMailBodyText(translation)}</div>
+                    </div>
+                  )}
                   <div className="text-sm leading-6 whitespace-pre-wrap">{toMailBodyText(msg.body)}</div>
                 </div>
               ))}
@@ -505,8 +554,8 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                   className="h-10 rounded-xl border-purple-500/20 bg-purple-500/5 text-xs"
                 />
               </div>
-              <Button 
-                onClick={handleDraftReply} 
+              <Button
+                onClick={handleDraftReply}
                 disabled={isDrafting || !instruction}
                 aria-busy={isDrafting}
                 variant="outline"
@@ -517,11 +566,11 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                 {isDrafting ? "초안 작성 중" : "답장 초안 생성"}
               </Button>
             </div>
-            
+
             {draftError && <p role="alert" className="text-sm text-red-500">{draftError}</p>}
 
             <label htmlFor="reply-draft" className="sr-only">답장 초안</label>
-            <Textarea 
+            <Textarea
               id="reply-draft"
               aria-label="답장 초안"
               value={draft}
@@ -529,7 +578,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
               placeholder="답장 초안을 작성하거나 판단 보조로 초안을 생성하세요..."
               className="min-h-[150px] rounded-2xl border-purple-500/20 bg-background/70"
             />
-            
+
             <div className="flex items-center justify-between">
               <div>
                 {sendStatus && (
@@ -540,8 +589,8 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
               </div>
               <div className="flex gap-2">
                 {draft && (
-                  <Button 
-                    onClick={() => { setDraft(''); setSendStatus(null); setDraftError(null); }} 
+                  <Button
+                    onClick={() => { setDraft(''); setSendStatus(null); setDraftError(null); }}
                     variant="ghost"
                     size="sm"
                     className="h-9 rounded-xl"
@@ -549,8 +598,8 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     지우기
                   </Button>
                 )}
-                <Button 
-                  onClick={handleSendReply} 
+                <Button
+                  onClick={handleSendReply}
                   disabled={isSending || !draft}
                   aria-busy={isSending}
                   size="sm"
