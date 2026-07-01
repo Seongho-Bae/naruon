@@ -21,6 +21,21 @@ from main import app
 TEST_SESSION_HMAC_SECRET = os.environ["AUTH_SESSION_HMAC_SECRET"]
 
 
+def _iter_app_routes(routes, inherited_dependencies=()):
+    for route in routes:
+        original_router = getattr(route, "original_router", None)
+        if original_router is not None:
+            include_context = getattr(route, "include_context", None)
+            include_dependencies = tuple(getattr(include_context, "dependencies", ()) or ())
+            yield from _iter_app_routes(
+                original_router.routes,
+                (*inherited_dependencies, *include_dependencies),
+            )
+        else:
+            route_dependencies = tuple(getattr(route, "dependencies", ()) or ())
+            yield route, (*inherited_dependencies, *route_dependencies)
+
+
 class _MockResult:
     def __init__(self, token: str | None):
         self.token = token
@@ -186,10 +201,10 @@ def test_runner_ws_rejects_missing_auth():
 
 
 def test_runner_ws_route_uses_signed_session_dependency():
-    for route in app.routes:
+    for route, dependencies in _iter_app_routes(app.routes):
         if isinstance(route, APIWebSocketRoute) and route.path == "/ws/runner/{token}":
-            dependencies = {dependency.dependency for dependency in route.dependencies}
-            assert get_auth_context in dependencies
+            dependency_callables = {dependency.dependency for dependency in dependencies}
+            assert get_auth_context in dependency_callables
             return
 
     raise AssertionError("Runner WebSocket route is not registered")
