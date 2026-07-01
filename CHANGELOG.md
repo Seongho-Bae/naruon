@@ -8,6 +8,7 @@
 
 - `backend/api/security.py`에서 사용하지 않는 `from __future__ import annotations` 구문을 제거하고 조건 표현식을 정리했습니다.
 - `backend/alembic/env.py`에서 사용하지 않는 `from __future__ import annotations` 구문을 제거해 Alembic 환경 설정 코드를 간결하게 정리했습니다.
+- `_import_single_eml`의 embedding 생성과 `Email`/attachment 객체 생성을 헬퍼 함수로 분리해 email import 서비스의 복잡도를 낮췄습니다.
 - `backend/tests/test_tenant_config_api.py` 내의 `test_create_read_pop3_postgres_smoke` 함수의 복잡한 설정 로직을 `pytest` fixture로 분리하여 코드 가독성과 유지보수성을 개선했습니다.
 - `backend/tests/test_webdav_api.py`의 복잡한 PostgreSQL smoke 테스트 설정을 재사용 가능한 DB 연결 확인 헬퍼와 인증/DB 클라이언트 컨텍스트 매니저로 분리했습니다.
 - `backend/tests/test_release_governance.py`의 복잡한 Strix 실패 체크 리뷰 테스트를 명확한 작은 테스트 단위로 분리하여 유지보수성을 개선했습니다.
