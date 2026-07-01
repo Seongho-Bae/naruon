@@ -2,22 +2,22 @@ import asyncio
 import datetime
 import logging
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 import aioimaplib
 from sqlalchemy import select
 
 from db.models import Email, TenantConfig
 from db.session import AsyncSessionLocal
-from services.email_parser import EmailData
+from services.email_client import validate_imap_destination
+from services.email_dedupe_service import strong_email_fingerprint
+from services.email_parser import EmailData, parse_eml_bytes
+from services.exceptions import EmailParseError
 from services.knowledge_extractor import (
     extract_knowledge_from_self_sent,
     is_self_sent_email,
 )
-from services.email_client import validate_imap_destination
-from services.email_parser import parse_eml_bytes
-from services.exceptions import EmailParseError
 from services.threading_service import assign_thread_id, generate_email_fingerprint
-from services.email_dedupe_service import strong_email_fingerprint
 
 
 async def process_fetched_email(
@@ -100,6 +100,16 @@ logger = logging.getLogger(__name__)
 MAX_IMAP_FETCH_MESSAGES = 10
 
 
+@dataclass(frozen=True, slots=True)
+class ImapSyncConfig:
+    user_id: str
+    organization_id: str | None
+    imap_server: str
+    imap_port: int
+    imap_username: str | None
+    imap_password: str | None
+
+
 class ImapSyncWorker:
     def __init__(self):
         self._task = None
@@ -145,22 +155,41 @@ class ImapSyncWorker:
 
     async def _sync(self):
         async with AsyncSessionLocal() as session:
-            result = await session.execute(select(TenantConfig).where(TenantConfig.imap_server.isnot(None)))
-            configs = result.scalars().all()
-            
+            result = await session.execute(
+                select(
+                    TenantConfig.user_id,
+                    TenantConfig.organization_id,
+                    TenantConfig.imap_server,
+                    TenantConfig.imap_port,
+                    TenantConfig.imap_username,
+                    TenantConfig.imap_password,
+                ).where(
+                    TenantConfig.imap_server.isnot(None),
+                    TenantConfig.imap_port.isnot(None),
+                )
+            )
+            configs = [
+                ImapSyncConfig(
+                    user_id=row.user_id,
+                    organization_id=row.organization_id,
+                    imap_server=str(row.imap_server),
+                    imap_port=int(row.imap_port),
+                    imap_username=row.imap_username,
+                    imap_password=row.imap_password,
+                )
+                for row in result
+            ]
+
         tasks = []
         for config in configs:
-            if not config.imap_server or not config.imap_port:
-                continue
             tasks.append(self._sync_tenant(config))
-            
+
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def _sync_tenant(self, config: TenantConfig):
-        # Already verified not None in caller
+    async def _sync_tenant(self, config: TenantConfig | ImapSyncConfig):
         imap_server = str(config.imap_server)
-        imap_port = int(config.imap_port)  # type: ignore
+        imap_port = int(config.imap_port)  # type: ignore[arg-type]
         try:
             imap_server, imap_port = validate_imap_destination(imap_server, imap_port)
         except ValueError:
