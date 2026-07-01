@@ -7,8 +7,13 @@ describe("Vitest React setup", () => {
   });
 
   it("provides browser storage in jsdom tests", () => {
+    const key = "naruon_test_storage";
     expect(window.localStorage).toBeDefined();
-    window.localStorage.setItem("naruon_test_storage", "ready");
-    expect(window.localStorage.getItem("naruon_test_storage")).toBe("ready");
+    try {
+      window.localStorage.setItem(key, "ready");
+      expect(window.localStorage.getItem(key)).toBe("ready");
+    } finally {
+      window.localStorage.removeItem(key);
+    }
   });
 });
