@@ -60,6 +60,8 @@ vi.mock("lucide-react", () => ({
   PenLine: () => <svg aria-hidden="true" />,
   Menu: () => <svg aria-hidden="true" />,
   UserCircle: () => <svg aria-hidden="true" />,
+  Play: () => <svg aria-hidden="true" />,
+  Power: () => <svg aria-hidden="true" />,
 }));
 
 function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 500) {
@@ -159,7 +161,7 @@ describe("ToolsPage", () => {
     });
     await flushAsyncWork();
 
-    const button = container.querySelector('button.w-full.bg-indigo-600');
+    const button = container.querySelector('button[data-tool-execute="test_tool"]');
     expect(button).not.toBeNull();
 
     act(() => {
@@ -198,7 +200,7 @@ describe("ToolsPage", () => {
     });
     await flushAsyncWork();
 
-    const button = container.querySelector('button.w-full.bg-indigo-600');
+    const button = container.querySelector('button[data-tool-execute="test_tool"]');
 
     act(() => {
       button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));

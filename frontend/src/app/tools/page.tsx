@@ -1,9 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api-client";
-import { DashboardLayout } from "@/components/DashboardLayout";
-import { Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Play,
+  Power,
+  RefreshCw,
+  SlidersHorizontal,
+  Wrench,
+} from "lucide-react";
 
 interface ToolInfo {
   code: string;
@@ -51,10 +70,33 @@ function defaultParameterValue(descriptor: unknown) {
   }
 }
 
+function parameterTypeLabel(descriptor: unknown) {
+  if (typeof descriptor === "string") return descriptor;
+  if (descriptor && typeof descriptor === "object" && "type" in descriptor) {
+    return String((descriptor as { type?: unknown }).type ?? "string");
+  }
+  return "string";
+}
+
+function resultTone(status: string) {
+  return status === "success"
+    ? "border-green-200 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-200"
+    : "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200";
+}
+
+function resultLabel(status: string) {
+  return status === "success" ? "성공" : "실패";
+}
+
+function resultMessage(response: ExecuteResponse) {
+  return response.message || JSON.stringify(response.result);
+}
+
 export default function ToolsPage() {
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [executing, setExecuting] = useState<Record<string, boolean>>({});
   const [results, setResults] = useState<Record<string, ExecuteResponse>>({});
 
@@ -75,7 +117,25 @@ export default function ToolsPage() {
         }
       });
     return () => { isMounted = false; };
-  }, []);
+  }, [refreshNonce]);
+
+  const requestRefresh = () => {
+    setLoading(true);
+    setLoadError(false);
+    setRefreshNonce((value) => value + 1);
+  };
+
+  const summaryCards = useMemo(() => {
+    const activeCount = tools.filter((tool) => tool.is_active !== false).length;
+    const categoryCount = new Set(tools.map((tool) => tool.category)).size;
+    const parameterizedCount = tools.filter((tool) => Object.keys(tool.parameters ?? {}).length > 0).length;
+    return [
+      { label: "등록 도구", value: tools.length.toLocaleString(), detail: "워크스페이스 실행 대상", icon: Wrench },
+      { label: "활성 도구", value: activeCount.toLocaleString(), detail: "즉시 실행 가능", icon: Power },
+      { label: "카테고리", value: categoryCount.toLocaleString(), detail: "운영 분류 기준", icon: SlidersHorizontal },
+      { label: "파라미터 계약", value: parameterizedCount.toLocaleString(), detail: "입력 스키마 보유", icon: CheckCircle2 },
+    ];
+  }, [tools]);
 
   const handleExecute = async (code: string) => {
     setExecuting(prev => ({ ...prev, [code]: true }));
@@ -96,59 +156,170 @@ export default function ToolsPage() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="p-6 max-w-4xl mx-auto space-y-6">
-        <header>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">도구 목록</h1>
-          <p className="text-sm text-slate-500 mt-2">이 AI 워크스페이스에서 자동화 분석 및 작업 실행에 사용하는 도구 목록입니다.</p>
+    <div className="h-full min-h-0 overflow-y-auto bg-background text-foreground">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:p-6">
+        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-5">
+          <div className="min-w-0">
+            <Badge variant="outline" className="gap-1 border-primary/20 bg-primary/10 font-black text-primary">
+              <Wrench className="size-3" aria-hidden="true" />
+              Tool Registry
+            </Badge>
+            <h1 className="mt-3 flex items-center gap-3 text-2xl font-black md:text-3xl">
+              <Wrench className="size-7 text-primary" aria-hidden="true" />
+              도구 실행 콘솔
+            </h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+              자동화 분석과 작업 실행에 연결된 도구의 상태, 입력 계약, 실행 결과를 확인합니다.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={requestRefresh}
+            disabled={loading}
+            aria-busy={loading}
+            className="font-black"
+          >
+            <RefreshCw className={cn("size-4", loading && "animate-spin")} aria-hidden="true" />
+            {loading ? "새로고침 중" : "새로고침"}
+          </Button>
         </header>
 
+        {!loading && !loadError && tools.length > 0 && (
+          <section aria-label="도구 레지스트리 요약" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {summaryCards.map(({ label, value, detail, icon: Icon }) => (
+              <Card key={label} size="sm">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-3">
+                    <CardDescription className="font-black">{label}</CardDescription>
+                    <Icon className="size-4 text-primary" aria-hidden="true" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-3xl font-black">{value}</p>
+                  <p className="mt-1 text-xs font-semibold text-muted-foreground">{detail}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </section>
+        )}
+
         {loading ? (
-          <div role="status" aria-live="polite" className="text-sm text-slate-500">
-            도구 목록을 불러오는 중입니다...
-          </div>
+          <Card role="status" aria-live="polite">
+            <CardContent className="flex items-center gap-3 py-6 font-bold text-primary">
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              도구 목록을 불러오는 중입니다.
+            </CardContent>
+          </Card>
+        ) : loadError ? (
+          <Card role="alert" className="border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200">
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 py-5">
+              <div className="flex min-w-0 items-center gap-3">
+                <AlertCircle className="size-5 shrink-0" aria-hidden="true" />
+                <p className="font-black">도구 목록을 불러오지 못했습니다. 잠시 후 다시 시도하세요.</p>
+              </div>
+              <Button type="button" variant="destructive" onClick={requestRefresh} className="font-black">
+                <RefreshCw className="size-4" aria-hidden="true" />
+                다시 시도
+              </Button>
+            </CardContent>
+          </Card>
         ) : tools.length === 0 ? (
-          <div role="status" aria-live="polite" className="text-sm text-slate-500 bg-slate-50 p-6 rounded-xl border border-slate-200/60 text-center">
-            {loadError ? "도구 목록을 불러오지 못했습니다. 잠시 후 다시 시도하세요." : "사용 가능한 도구가 없습니다."}
-          </div>
+          <Card role="status" aria-live="polite" className="border-dashed text-center">
+            <CardContent className="py-10">
+              <Wrench className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
+              <p className="mt-3 font-black">사용 가능한 도구가 없습니다.</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">백엔드 도구 레지스트리가 비어 있으면 이 화면은 실행 버튼을 표시하지 않습니다.</p>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <section aria-label="도구 실행 카드" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {tools.map((tool) => (
-              <div key={tool.code} className="bg-white p-6 rounded-xl border border-slate-200/60 shadow-sm transition-shadow hover:shadow-md flex flex-col h-full">
-                <div className="mb-4">
-                  <span className="inline-block px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-full mb-3">
-                    {tool.category}
-                  </span>
-                  <h3 className="font-medium text-slate-900">{tool.name}</h3>
-                </div>
-                <p className="text-sm text-slate-500 leading-relaxed flex-grow">{tool.description}</p>
-                <div className="mt-4 pt-4 border-t border-slate-100">
-                  <button
+              <Card key={tool.code} className={cn(tool.is_active === false && "opacity-70")}>
+                <CardHeader>
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="font-black">{tool.category}</Badge>
+                        <Badge
+                          variant={tool.is_active === false ? "secondary" : "default"}
+                          className="font-black"
+                        >
+                          {tool.is_active === false ? "비활성" : "활성"}
+                        </Badge>
+                      </div>
+                      <CardTitle className="mt-3 font-black">{tool.name}</CardTitle>
+                      <CardDescription className="mt-2 leading-6">{tool.description}</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="grid flex-1 gap-4">
+                  <div className="rounded-xl border border-border bg-background p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-black text-muted-foreground">입력 파라미터</p>
+                      <Badge variant="secondary" className="font-black">
+                        {Object.keys(tool.parameters ?? {}).length}
+                      </Badge>
+                    </div>
+                    {Object.keys(tool.parameters ?? {}).length === 0 ? (
+                      <p className="mt-2 text-sm font-semibold text-muted-foreground">필요한 입력 없음</p>
+                    ) : (
+                      <dl className="mt-3 grid gap-2">
+                        {Object.entries(tool.parameters ?? {}).map(([key, descriptor]) => (
+                          <div key={key} className="flex items-center justify-between gap-3 text-sm">
+                            <dt className="min-w-0 truncate font-bold">{key}</dt>
+                            <dd className="shrink-0 rounded-lg bg-secondary px-2 py-1 text-xs font-black text-muted-foreground">
+                              {parameterTypeLabel(descriptor)}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                  </div>
+                  {results[tool.code] && (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      className={cn("rounded-xl border p-3 text-sm", resultTone(results[tool.code].status))}
+                    >
+                      <div className="flex items-center gap-2 font-black">
+                        {results[tool.code].status === "success" ? (
+                          <CheckCircle2 className="size-4" aria-hidden="true" />
+                        ) : (
+                          <AlertCircle className="size-4" aria-hidden="true" />
+                        )}
+                        {resultLabel(results[tool.code].status)}
+                      </div>
+                      <p className="mt-2 break-words text-xs font-semibold leading-5">{resultMessage(results[tool.code])}</p>
+                    </div>
+                  )}
+                </CardContent>
+                <CardFooter className="justify-end">
+                  <Button
+                    type="button"
                     onClick={() => handleExecute(tool.code)}
                     disabled={executing[tool.code] || tool.is_active === false}
-                    className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                    data-tool-execute={tool.code}
+                    className="w-full font-black"
                   >
                     {executing[tool.code] ? (
                       <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        실행 중...
+                        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                        실행 중
                       </>
                     ) : (
-                      "실행 테스트"
+                      <>
+                        <Play className="size-4" aria-hidden="true" />
+                        {tool.is_active === false ? "비활성 도구" : "실행 테스트"}
+                      </>
                     )}
-                  </button>
-                  {results[tool.code] && (
-                    <div className={`mt-3 p-3 rounded-md text-xs ${results[tool.code].status === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-                      <p className="font-semibold">{results[tool.code].status === 'success' ? '성공' : '실패'}</p>
-                      <p className="mt-1 break-all">{results[tool.code].message || JSON.stringify(results[tool.code].result)}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
+                  </Button>
+                </CardFooter>
+              </Card>
             ))}
-          </div>
+          </section>
         )}
       </div>
-    </DashboardLayout>
+    </div>
   );
 }
