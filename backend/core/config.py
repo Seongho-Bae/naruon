@@ -7,7 +7,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from core.runtime_secrets import (
     validate_auth_session_hmac_secret_value,
 )
-from core.url_validation import parse_allowed_hosts, validate_https_url_host
+from core.url_validation import (
+    parse_allowed_hosts,
+    validate_https_url_host_details,
+    validate_same_or_subdomain_host,
+)
 
 DEFAULT_ORIGIN_PORTS = {
     "http": 80,
@@ -139,17 +143,23 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "ALLOWED_OIDC_HOSTS must list trusted OIDC issuer and JWKS hosts"
                 )
-            validate_https_url_host(
+            issuer_url = validate_https_url_host_details(
                 "OIDC_ISSUER_URL",
                 self.OIDC_ISSUER_URL or "",
                 allowed_oidc_hosts,
                 "ALLOWED_OIDC_HOSTS",
             )
-            validate_https_url_host(
+            jwks_url = validate_https_url_host_details(
                 "OIDC_JWKS_URL",
                 self.OIDC_JWKS_URL or "",
                 allowed_oidc_hosts,
                 "ALLOWED_OIDC_HOSTS",
+            )
+            validate_same_or_subdomain_host(
+                "OIDC_JWKS_URL",
+                jwks_url.hostname,
+                "OIDC_ISSUER_URL",
+                issuer_url.hostname,
             )
         return self
 
