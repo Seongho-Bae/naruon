@@ -383,6 +383,7 @@ class _PinnedLLMProviderNetworkBackend(httpcore.AsyncNetworkBackend):
 
 class _PinnedLLMProviderAsyncTransport(httpx.AsyncBaseTransport):
     def __init__(self, validated: ValidatedLLMProviderBaseURL):
+        self._validated = validated
         ssl_context = create_ssl_context(verify=True, trust_env=False)
         self._pool = httpcore.AsyncConnectionPool(
             ssl_context=ssl_context,
@@ -399,15 +400,27 @@ class _PinnedLLMProviderAsyncTransport(httpx.AsyncBaseTransport):
         )
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        parsed_url = urlsplit(self._validated.normalized_url)
+        validated_scheme = parsed_url.scheme.encode("ascii")
+        validated_host = self._validated.hostname.encode("ascii")
+        validated_netloc = parsed_url.netloc.encode("ascii")
+
+        safe_headers = [
+            (key, value)
+            for key, value in request.headers.raw
+            if key.lower() != b"host"
+        ]
+        safe_headers.append((b"host", validated_netloc))
+
         req = httpcore.Request(
             method=request.method,
             url=httpcore.URL(
-                scheme=request.url.raw_scheme,
-                host=request.url.raw_host,
-                port=request.url.port,
+                scheme=validated_scheme,
+                host=validated_host,
+                port=self._validated.port,
                 target=request.url.raw_path,
             ),
-            headers=request.headers.raw,
+            headers=safe_headers,
             content=request.stream,
             extensions=request.extensions,
         )
