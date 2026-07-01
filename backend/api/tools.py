@@ -99,21 +99,15 @@ def _parameter_type_name(descriptor: Any) -> str:
 
 
 def _parameter_matches_type(value: Any, expected_type: str) -> bool:
-    match expected_type:
-        case "string":
-            return isinstance(value, str)
-        case "number":
-            return isinstance(value, (int, float)) and not isinstance(value, bool)
-        case "integer":
-            return isinstance(value, int) and not isinstance(value, bool)
-        case "boolean":
-            return isinstance(value, bool)
-        case "array":
-            return isinstance(value, list)
-        case "object":
-            return isinstance(value, dict)
-        case _:
-            return isinstance(value, str)
+    validators = {
+        "string": lambda candidate: isinstance(candidate, str),
+        "number": lambda candidate: isinstance(candidate, (int, float)) and not isinstance(candidate, bool),
+        "integer": lambda candidate: isinstance(candidate, int) and not isinstance(candidate, bool),
+        "boolean": lambda candidate: isinstance(candidate, bool),
+        "array": lambda candidate: isinstance(candidate, list),
+        "object": lambda candidate: isinstance(candidate, dict),
+    }
+    return validators.get(expected_type, validators["string"])(value)
 
 registry.register(
     ToolInfo(
