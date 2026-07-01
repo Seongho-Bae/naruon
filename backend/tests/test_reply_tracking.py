@@ -179,6 +179,34 @@ async def test_missing_reply_tracking_scopes_email_query_to_user_and_org():
 
 
 @pytest.mark.asyncio
+async def test_missing_reply_tracking_uses_provided_tenant_config_without_lookup():
+    from services.reply_tracking_service import check_missing_replies
+
+    email_awaiting = Email(
+        id=8,
+        user_id="user_1",
+        organization_id="org_1",
+        sender="my@email.com",
+        recipients="other@email.com",
+        date=datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=3),
+        body="Please reply by tomorrow.",
+        thread_id="thread_8",
+    )
+    config_mock = TenantConfig(user_id="user_1", smtp_username="my@email.com")
+    session = ReplyTrackingSession(None, [email_awaiting])
+
+    flagged_emails = await check_missing_replies(
+        session,
+        "user_1",
+        "org_1",
+        tenant_config=config_mock,
+    )
+
+    assert [email.id for email in flagged_emails] == [8]
+    assert all("tenant_configs" not in compiled_query_text(query) for query in session.queries)
+
+
+@pytest.mark.asyncio
 async def test_requires_reply_in_email_response():
     # Test that `requires_reply` and `schedule_conflict` are exposed in response
     item = EmailListItem(

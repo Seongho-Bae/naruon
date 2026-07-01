@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import Email, TicketTask
+from db.models import Email, TenantConfig, TicketTask
 from services.reply_tracking_service import check_missing_replies
 from services.text_safety import contains_html_markup
 from services.threading_service import normalize_message_id
@@ -278,8 +278,11 @@ async def create_reply_sla_escalation_tasks(
     organization_id: str | None,
     overdue_hours: int,
     limit: int,
+    tenant_config: TenantConfig | None = None,
 ) -> ReplySlaEscalationResult:
-    pending_replies = await check_missing_replies(db, user_id, organization_id)
+    pending_replies = await check_missing_replies(
+        db, user_id, organization_id, tenant_config=tenant_config
+    )
     now = datetime.datetime.now(datetime.timezone.utc)
     overdue_cutoff = now - datetime.timedelta(hours=overdue_hours)
     overdue_replies = sorted(
