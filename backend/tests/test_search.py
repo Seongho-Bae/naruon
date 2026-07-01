@@ -175,6 +175,31 @@ def test_search_reply_counts_group_by_coalesced_thread_key():
     assert "group by coalesce(nullif(btrim(btrim(email_records.thread_id)" in sql
 
 
+def test_thread_group_key_uses_trimmed_thread_then_message_id():
+    from sqlalchemy.dialects import postgresql
+
+    from api.search import thread_group_key
+
+    compiled_sql = " ".join(
+        str(
+            thread_group_key().compile(
+                dialect=postgresql.dialect(),
+                compile_kwargs={"literal_binds": True},
+            )
+        )
+        .lower()
+        .split()
+    )
+    expected_sql = (
+        "coalesce("
+        "nullif(btrim(btrim(email_records.thread_id), '<>'), ''), "
+        "nullif(btrim(btrim(email_records.message_id), '<>'), '')"
+        ")"
+    )
+
+    assert expected_sql in compiled_sql
+
+
 @patch("api.search.generate_embeddings", new_callable=AsyncMock)
 def test_search_endpoint_query_is_scoped_to_current_user(mock_generate_embeddings):
     mock_generate_embeddings.return_value = [[0.1] * 1536]
