@@ -456,7 +456,9 @@ export function SearchLayout() {
       });
   };
 
-  const resultList = (
+  // ⚡ Bolt: Wrap search results in useMemo to prevent O(N) re-renders when other state changes
+  // 🎯 Why: Mapping over long lists of search results blocks the main thread during unrelated state updates.
+  const resultList = useMemo(() => (
     <div className="divide-y divide-border">
       {loading ? (
         <div
@@ -490,7 +492,7 @@ export function SearchLayout() {
         ))
       )}
     </div>
-  );
+  ), [loading, error, filteredResults, activeResult?.id, setActiveResultId]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
