@@ -337,4 +337,30 @@ describe('AIHubPage', () => {
     expect(container.textContent).toContain('다시 시도');
     expect(consoleError).toHaveBeenCalled();
   });
+
+  it('renders an accessible evaluation empty state when no metrics exist', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse({
+          ...aiHubSurface,
+          evaluation_metrics: [],
+        }),
+      ),
+    );
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<AIHubPage />);
+    });
+    await flushAsyncWork();
+
+    clickButton(container, '평가');
+
+    expect(container.textContent).toContain('평가 근거가 없습니다.');
+    expect(container.textContent).toContain('정확성, 관련성, 안전성 지표');
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('평가 근거가 없습니다.');
+  });
 });
