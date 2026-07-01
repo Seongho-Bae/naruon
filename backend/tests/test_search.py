@@ -1,10 +1,12 @@
 import datetime
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
+
 from db.models import LLMProvider
-from main import app
 from db.session import get_db, get_readonly_db
+from main import app
 from services.exceptions import EmbeddingGenerationError
 from services.llm_provider_selection import LOCAL_PROVIDER_API_KEY
 
@@ -284,8 +286,7 @@ def test_search_uses_primary_config_session_and_readonly_search_session(
         "llm_providers" in str(stmt).lower() for stmt in config_session.statements
     )
     assert all(
-        "combined_search" not in str(stmt).lower()
-        for stmt in config_session.statements
+        "combined_search" not in str(stmt).lower() for stmt in config_session.statements
     )
     assert "combined_search" in str(search_session.statements[-1]).lower()
 
@@ -315,3 +316,26 @@ def test_search_pads_local_embedding_dimension_for_vector_search(
     query_text = str(session.statements[-1]).lower()
     assert "ts_rank_cd" in query_text
     assert "<=>" in query_text
+
+
+def test_build_reply_counts_subquery_with_user_id():
+    from api.search import build_reply_counts_subquery
+
+    subquery = build_reply_counts_subquery(user_id="user1")
+    sql = str(subquery.select()).lower()
+
+    assert "where email_records.user_id = :user_id_1" in sql
+    assert "group by coalesce" in sql
+
+
+def test_build_reply_counts_subquery_with_user_and_org_id():
+    from api.search import build_reply_counts_subquery
+
+    subquery = build_reply_counts_subquery(user_id="user1", organization_id="org1")
+    sql = str(subquery.select()).lower()
+
+    assert (
+        "where email_records.user_id = :user_id_1 and email_records.organization_id = :organization_id_1"
+        in sql
+    )
+    assert "group by coalesce" in sql
