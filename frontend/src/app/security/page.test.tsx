@@ -106,11 +106,11 @@ const securitySurface = {
   ],
 };
 
-function mockSecurityFetch() {
+function mockSecurityFetch(surface: typeof securitySurface = securitySurface) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     void init;
     if (String(input) === "/api/security/access-surface") {
-      return jsonResponse(securitySurface);
+      return jsonResponse(surface);
     }
     throw new Error(`Unhandled fetch: ${String(input)}`);
   });
@@ -223,5 +223,47 @@ describe("SecurityPage", () => {
         expect(container.textContent).not.toContain("services.access_policy.evaluate_access");
       }
     }
+  });
+
+  it("keeps sparse security sections visible and source-backed instead of blank", async () => {
+    const sparseSurface = {
+      ...securitySurface,
+      policy_decisions: [],
+      policy_order: [],
+      external_share_reviews: [
+        ...securitySurface.external_share_reviews,
+        {
+          source_type: "caldav_source",
+          review_label: "Calendar writeback boundary",
+          exposure_level: "external_writeback",
+          decision_reason: "consent_denied",
+        },
+      ],
+    };
+    vi.stubGlobal("fetch", mockSecurityFetch(sparseSurface));
+    ({ container, root } = await renderSecurityPage());
+
+    const dashboardTab = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("보안 대시보드"),
+    );
+    expect(dashboardTab).toBeDefined();
+    await act(async () => {
+      dashboardTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(container.textContent).toContain("외부 쓰기");
+    expect(container.textContent).toContain("2건");
+    expect(container.textContent).toContain("현재 signed-session 스코프에서 확인된 접근 판정이 없습니다.");
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("접근 판정");
+
+    const policyTab = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("정책"),
+    );
+    expect(policyTab).toBeDefined();
+    await act(async () => {
+      policyTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(container.textContent).toContain("현재 signed-session 스코프에서 확인된 정책 판정 순서가 없습니다.");
+    expect(container.textContent).toContain("현재 signed-session 스코프에서 확인된 정책 판정 샘플이 없습니다.");
+    expect(container.textContent).not.toContain("곧 제공됩니다");
   });
 });

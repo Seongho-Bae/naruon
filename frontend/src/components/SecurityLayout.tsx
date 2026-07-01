@@ -159,6 +159,14 @@ function evidenceLabel(evidenceLabelValue: string) {
   return '서버 근거';
 }
 
+function subjectParticle(label: string) {
+  const lastChar = label.trim().at(-1);
+  if (!lastChar) return '가';
+  const code = lastChar.charCodeAt(0);
+  if (code < 0xac00 || code > 0xd7a3) return '가';
+  return (code - 0xac00) % 28 === 0 ? '가' : '이';
+}
+
 function connectorStateLabel(stateCode: string) {
   switch (stateCode) {
     case 'heartbeat':
@@ -246,8 +254,8 @@ function ErrorPanel({ message }: { message: string }) {
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
-      현재 signed-session 스코프에서 확인된 {label}가 없습니다.
+    <div role="status" aria-live="polite" className="rounded-lg border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
+      현재 signed-session 스코프에서 확인된 {label}{subjectParticle(label)} 없습니다.
     </div>
   );
 }
@@ -281,6 +289,9 @@ function DashboardTab({ data }: { data: SecurityAccessSurface }) {
   const allowedCount = data.policy_decisions.filter((decision) => decision.allowed).length;
   const deniedCount = data.policy_decisions.length - allowedCount;
   const writebackReady = data.sources.filter((source) => source.writeback_enabled).length;
+  const externalWritebackReviewCount = data.external_share_reviews.filter(
+    (review) => review.exposure_level === 'external_writeback',
+  ).length;
 
   return (
     <section aria-label="보안 거버넌스 대시보드" className="space-y-5">
@@ -305,8 +316,8 @@ function DashboardTab({ data }: { data: SecurityAccessSurface }) {
         />
         <SummaryCard
           title="외부 쓰기"
-          value="0건"
-          detail="이 화면은 읽기 전용 근거만 표시합니다."
+          value={`${externalWritebackReviewCount}건`}
+          detail="실행 없이 검토 큐 근거만 표시합니다."
           icon={<Lock className="size-5" />}
         />
       </div>
@@ -323,17 +334,23 @@ function DashboardTab({ data }: { data: SecurityAccessSurface }) {
             감사 근거 기록됨
           </span>
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-          {data.policy_decisions.slice(0, 4).map((decision, index) => (
-            <div key={`${decision.resource_type}-${index}`} className="rounded-lg border border-border bg-background p-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="min-w-0 truncate text-sm font-bold">{decisionResourceLabel(decision)}</p>
-                <DecisionPill decision={decision} />
+        {data.policy_decisions.length === 0 ? (
+          <div className="mt-4">
+            <EmptyState label="접근 판정" />
+          </div>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+            {data.policy_decisions.slice(0, 4).map((decision, index) => (
+              <div key={`${decision.resource_type}-${index}`} className="rounded-lg border border-border bg-background p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="min-w-0 truncate text-sm font-bold">{decisionResourceLabel(decision)}</p>
+                  <DecisionPill decision={decision} />
+                </div>
+                <p className="mt-2 truncate text-xs font-semibold text-muted-foreground">{evidenceLabel(decision.evidence_label)}</p>
               </div>
-              <p className="mt-2 truncate text-xs font-semibold text-muted-foreground">{evidenceLabel(decision.evidence_label)}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -572,46 +589,58 @@ function PolicyTab({ data }: { data: SecurityAccessSurface }) {
         <p className="mt-1 text-sm text-muted-foreground">
           NIST ABAC 모델과 OWASP deny-by-default 원칙에 맞춰 속성 차단을 역할 허용보다 먼저 평가합니다.
         </p>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-          {data.policy_order.map((step, index) => (
-            <div key={`${step.display_name}-${index}`} className="rounded-lg border border-border bg-background p-3">
-              <div className="flex items-center gap-3">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-                  {index + 1}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold">{policyStepLabel(step)}</p>
-                  <p className="mt-1 truncate text-xs font-semibold text-muted-foreground">{evidenceLabel(step.evidence_label)}</p>
+        {data.policy_order.length === 0 ? (
+          <div className="mt-4">
+            <EmptyState label="정책 판정 순서" />
+          </div>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+            {data.policy_order.map((step, index) => (
+              <div key={`${step.display_name}-${index}`} className="rounded-lg border border-border bg-background p-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold">{policyStepLabel(step)}</p>
+                    <p className="mt-1 truncate text-xs font-semibold text-muted-foreground">{evidenceLabel(step.evidence_label)}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
       <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
         <h2 className="text-base font-bold">판정 샘플</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="border-b border-border bg-secondary/50 text-xs text-muted-foreground">
-              <tr>
-                <th className="p-3 font-bold">리소스</th>
-                <th className="p-3 font-bold">유형</th>
-                <th className="p-3 font-bold">판정</th>
-                <th className="p-3 font-bold">근거</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {data.policy_decisions.map((decision, index) => (
-                <tr key={`${decision.resource_type}-${index}`} className="bg-background">
-                  <td className="p-3 font-bold">{decisionResourceLabel(decision)}</td>
-                  <td className="p-3 text-xs font-semibold">{sourceTypeLabel(decision.resource_type)}</td>
-                  <td className="p-3"><DecisionPill decision={decision} /></td>
-                  <td className="p-3 text-xs font-semibold text-muted-foreground">{evidenceLabel(decision.evidence_label)}</td>
+        {data.policy_decisions.length === 0 ? (
+          <div className="mt-4">
+            <EmptyState label="정책 판정 샘플" />
+          </div>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="border-b border-border bg-secondary/50 text-xs text-muted-foreground">
+                <tr>
+                  <th className="p-3 font-bold">리소스</th>
+                  <th className="p-3 font-bold">유형</th>
+                  <th className="p-3 font-bold">판정</th>
+                  <th className="p-3 font-bold">근거</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {data.policy_decisions.map((decision, index) => (
+                  <tr key={`${decision.resource_type}-${index}`} className="bg-background">
+                    <td className="p-3 font-bold">{decisionResourceLabel(decision)}</td>
+                    <td className="p-3 text-xs font-semibold">{sourceTypeLabel(decision.resource_type)}</td>
+                    <td className="p-3"><DecisionPill decision={decision} /></td>
+                    <td className="p-3 text-xs font-semibold text-muted-foreground">{evidenceLabel(decision.evidence_label)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </section>
   );
