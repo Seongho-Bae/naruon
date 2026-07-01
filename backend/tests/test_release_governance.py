@@ -161,11 +161,11 @@ def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None
     assert "sqlalchemy==2.0.51" in requirements
     assert "asyncpg==0.31.0" in requirements
     assert "tiktoken==0.13.0" in requirements
-    assert "protobuf==7.35.1" in requirements
+    assert "protobuf==6.33.6" in requirements
     assert "setuptools==82.0.1" in requirements
     assert "wheel==0.47.0" in requirements
-    assert "opentelemetry-api==1.43.0" in requirements
-    assert "opentelemetry-instrumentation-fastapi==0.64b0" in requirements
+    assert "opentelemetry-api==1.42.1" in requirements
+    assert "opentelemetry-instrumentation-fastapi==0.63b1" in requirements
 
 
 def test_review_security_workflow_bundle_is_centralized() -> None:
