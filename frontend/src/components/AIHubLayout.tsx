@@ -154,7 +154,7 @@ function StatusBadge({ stateCode }: { stateCode: string }) {
 
 function EmptyState({ title, detail }: { title: string; detail: string }) {
   return (
-    <Card className="border-dashed text-center">
+    <Card role="status" aria-live="polite" className="border-dashed text-center">
       <CardContent className="py-8">
         <p className="font-bold text-foreground">{title}</p>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">{detail}</p>
@@ -328,6 +328,9 @@ function AgentsPanel({ agents }: { agents: AgentCard[] }) {
 }
 
 function EvaluationPanel({ metrics, onOpenRuns }: { metrics: EvaluationMetric[]; onOpenRuns: () => void }) {
+  if (metrics.length === 0) {
+    return <EmptyState title="평가 근거가 없습니다." detail="실행 이력과 모델 평가 점수가 기록되면 정확성, 관련성, 안전성 지표로 표시됩니다." />;
+  }
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {metrics.map((metric) => (
