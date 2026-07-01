@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from api import prompts as prompts_module
 from api.prompts import PromptTestRequest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -239,8 +240,6 @@ def test_prompt_list_scopes_shared_prompts_to_current_workspace(auth_client):
 
 
 def test_prompt_test_execution_mocked(auth_client, monkeypatch):
-    import api.prompts as prompts_module
-
     captured = {}
 
     # Mock LLM service
@@ -279,8 +278,6 @@ def test_prompt_test_execution_mocked(auth_client, monkeypatch):
 
 
 def test_prompt_test_applies_preview_settings(auth_client, monkeypatch):
-    import api.prompts as prompts_module
-
     captured = {}
 
     async def mock_execute(prompt_text, *args, **kwargs):
@@ -326,7 +323,6 @@ def test_prompt_test_applies_preview_settings(auth_client, monkeypatch):
 
 
 def test_prompt_test_wraps_variable_values_as_untrusted_data(auth_client, monkeypatch):
-    import api.prompts as prompts_module
     from db.models import LLMProvider
 
     captured = {}
@@ -372,7 +368,6 @@ def test_prompt_test_wraps_variable_values_as_untrusted_data(auth_client, monkey
 def test_prompt_test_does_not_render_placeholders_inside_variable_values(
     auth_client, monkeypatch
 ):
-    import api.prompts as prompts_module
     from db.models import LLMProvider
 
     captured = {}
@@ -416,8 +411,6 @@ def test_prompt_test_does_not_render_placeholders_inside_variable_values(
 def test_prompt_test_uses_only_current_organization_active_provider(
     auth_client, monkeypatch
 ):
-    import api.prompts as prompts_module
-
     captured = {}
 
     async def mock_execute(prompt_text, api_key, base_url, **kwargs):
@@ -461,8 +454,6 @@ def test_prompt_test_uses_only_current_organization_active_provider(
 def test_prompt_test_does_not_use_org_provider_without_org_scope(
     orgless_system_admin_client, monkeypatch
 ):
-    import api.prompts as prompts_module
-
     captured = {}
 
     async def mock_execute(prompt_text, api_key, base_url, **kwargs):
@@ -510,8 +501,6 @@ def test_prompt_test_rejects_abusive_preview_inputs(auth_client, payload):
 async def test_execute_prompt_with_llm_disables_redirect_following_for_custom_base_url(
     monkeypatch,
 ):
-    from api.prompts import execute_prompt_with_llm
-
     monkeypatch.setattr(
         settings, "ALLOWED_LLM_BASE_URL_HOSTS", "llm-gateway.example.com"
     )
@@ -537,7 +526,7 @@ async def test_execute_prompt_with_llm_disables_redirect_following_for_custom_ba
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
         mock_async_openai.return_value = mock_client
 
-        result = await execute_prompt_with_llm(
+        result = await prompts_module.execute_prompt_with_llm(
             "Summarize this",
             "test-key",
             base_url="https://llm-gateway.example.com/v1",
