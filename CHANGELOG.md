@@ -29,6 +29,7 @@
 
 - **알고리즘 혼동 취약점(CRITICAL) 방지:** JWT 디코딩 시 정적 분석 도구가 알고리즘 allowlist를 명확히 확인할 수 있도록 `algorithms` 인자를 하드코딩된 문자열 리스트로 지정했습니다.
 - (백엔드) 버전 정보를 읽어올 때 `VERSION` 파일이 없는 경우, 에러 메시지에서 애플리케이션의 내부 디렉토리 경로가 노출되는 취약점(Information Disclosure)을 수정했습니다.
+- LLM provider 전용 HTTP transport가 검증된 base URL의 scheme/host/port와 `Host` 헤더를 전송 직전에 고정하도록 보강해 임의 요청 URL 또는 헤더 주입을 통한 SSRF 우회를 차단했습니다.
 - release governance 테스트 계약에서 부분 실행 경로 기반 `subprocess.run` 경로를 제거해 테스트 보안 점검이 절대 경로 기반 실행 계약과 어긋나지 않도록 정리했습니다.
 - **CRLF 인젝션 방지:** 이메일 전송 API(`POST /api/emails/send`)의 `subject`, `to`, `in_reply_to`, `references` 파라미터에서 개행 문자(`\r`, `\n`)를 차단하는 엄격한 Pydantic 검증 로직을 추가하여 SMTP 명령 인젝션 취약점을 해결했습니다.
 - **이중 확장자 검증:** 이메일 파일 업로드 API(`POST /api/emails/import-files`)에서 `.exe.eml` 등 악성 이중 확장자 파일이 업로드되는 것을 방지하도록 확장자 검증 로직을 강화했습니다.

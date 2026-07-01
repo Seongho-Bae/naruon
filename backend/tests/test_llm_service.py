@@ -1,5 +1,6 @@
 import asyncio
 
+import httpx
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -190,6 +191,57 @@ async def test_llm_provider_pinned_backend_rejects_host_changes():
 
     with pytest.raises(OSError, match="host changed"):
         await backend.connect_tcp("metadata.google.internal", 443)
+
+
+@pytest.mark.asyncio
+async def test_llm_provider_transport_rewrites_request_origin_and_host_header():
+    validated = provider_urls.ValidatedLLMProviderBaseURL(
+        normalized_url="https://llm-gateway.example.com:8443/v1",
+        hostname="llm-gateway.example.com",
+        port=8443,
+        addresses=("93.184.216.34",),
+    )
+    transport = provider_urls._PinnedLLMProviderAsyncTransport(validated)
+    await transport._pool.aclose()
+
+    captured_request = None
+
+    class FakePool:
+        async def handle_async_request(self, request):
+            nonlocal captured_request
+            captured_request = request
+            raise RuntimeError("captured request")
+
+    transport._pool = FakePool()
+    request = httpx.Request(
+        "POST",
+        "https://metadata.google.internal/v1/chat/completions?stream=false",
+        headers=[
+            ("Host", "metadata.google.internal"),
+            ("HOST", "metadata.google.internal:443"),
+            ("X-Provider", "keep"),
+        ],
+        content=b"{}",
+    )
+
+    with pytest.raises(RuntimeError, match="captured request"):
+        await transport.handle_async_request(request)
+
+    assert captured_request is not None
+    assert captured_request.url.scheme == b"https"
+    assert captured_request.url.host == b"llm-gateway.example.com"
+    assert captured_request.url.port == 8443
+    assert captured_request.url.target == b"/v1/chat/completions?stream=false"
+    host_headers = [
+        (key, value)
+        for key, value in captured_request.headers
+        if key.lower() == b"host"
+    ]
+    assert host_headers == [(b"host", b"llm-gateway.example.com:8443")]
+    assert any(
+        key.lower() == b"x-provider" and value == b"keep"
+        for key, value in captured_request.headers
+    )
 
 
 @pytest.mark.asyncio
