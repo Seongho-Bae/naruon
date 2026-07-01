@@ -147,10 +147,6 @@ TENANT_ADMIN_ROLES = frozenset({"tenant_admin", "organization_admin"})
 ADMIN_ROLES = SYSTEM_ADMIN_ROLES | TENANT_ADMIN_ROLES
 SESSION_ISSUER = "naruon-control-plane"
 SESSION_AUDIENCE = "naruon-api"
-SESSION_SIGNING_ALGORITHM = "HS256"
-OIDC_SIGNING_ALGORITHM = "RS256"
-SESSION_ALLOWED_ALGORITHMS = (SESSION_SIGNING_ALGORITHM,)
-OIDC_ALLOWED_ALGORITHMS = (OIDC_SIGNING_ALGORITHM,)
 JWT_DECODE_REQUIRED_CLAIMS = ("exp", "iss", "aud")
 MIN_SESSION_SECRET_BYTES = 32
 MAX_SIGNED_SESSION_EXPIRATION_SECONDS = 12 * 60 * 60
@@ -234,7 +230,7 @@ def _oidc_unverified_header(token: str) -> dict[str, Any]:
     except Exception:
         raise _authentication_error() from None
     _reject_unsupported_critical_headers(header)
-    if header.get("alg") not in OIDC_ALLOWED_ALGORITHMS:
+    if header.get("alg") != "RS256":
         raise _authentication_error()
     key_id = header.get("kid")
     if not isinstance(key_id, str) or not key_id.strip():
@@ -253,7 +249,7 @@ def _decode_cached_oidc_session_payload(token: str) -> dict[str, Any]:
             payload = jwt.decode(
                 token,
                 signing_key.key,
-                algorithms=OIDC_ALLOWED_ALGORITHMS,
+                algorithms=["RS256"],
                 audience=settings.OIDC_CLIENT_ID,
                 issuer=settings.OIDC_ISSUER_URL,
                 options={
@@ -387,7 +383,7 @@ def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVer
         header = jwt.get_unverified_header(token)
     except jwt.PyJWTError:
         raise _authentication_error() from None
-    if header.get("alg") not in SESSION_ALLOWED_ALGORITHMS:
+    if header.get("alg") != "HS256":
         raise _authentication_error()
     _reject_unsupported_critical_headers(header)
 
@@ -395,7 +391,7 @@ def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVer
         payload = jwt.decode(
             token,
             _session_secret_bytes(),
-            algorithms=SESSION_ALLOWED_ALGORITHMS,
+            algorithms=["HS256"],
             audience=SESSION_AUDIENCE,
             issuer=SESSION_ISSUER,
             options={

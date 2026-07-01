@@ -95,3 +95,8 @@
 **Vulnerability:** Attackers could inject arbitrary SMTP commands (e.g. MAIL FROM) using CRLF (\r\n) sequences in email subjects or recipients because `^[^\r\n]*$` validation in Pydantic wasn't catching all edge cases correctly. Attackers could also bypass file upload validations by providing double extensions (e.g., `malicious.exe.eml`).
 **Learning:** Pydantic regex patterns might fall short for strict network protocol inputs like SMTP headers if improperly formulated or bypassed. Simple `.endswith()` checks for file uploads fail to prevent embedded dangerous extensions.
 **Prevention:** Always use `@field_validator` with explicit `mode="before"` string matching for `chr(10)` and `chr(13)` across all user-controlled email header fields (to, subject, in_reply_to, references). Always tokenize uploaded filenames via `.split(".")` and reject if any segment matches a known dangerous extension (e.g., `.exe`, `.sh`).
+
+## 2026-06-30 - JWT Algorithm Confusion
+**Vulnerability:** JWT decoding remained allowlisted but static analysis could not prove the accepted algorithm when `jwt.decode(..., algorithms=...)` received module-level variables.
+**Learning:** Security-sensitive decode boundaries should make accepted algorithms obvious to both runtime readers and static scanners.
+**Prevention:** Pass explicit hardcoded lists such as `algorithms=["HS256"]` and `algorithms=["RS256"]` at the decode call sites, and keep header preflight checks aligned with those exact values.
