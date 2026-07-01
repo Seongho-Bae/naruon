@@ -4,6 +4,10 @@
 - `CalendarLayout`의 일정 쓰기(Writeback) 액션 버튼들에 로딩 스피너(`Loader2`)를 추가하여 비동기 작업 시 즉각적인 시각적 피드백을 제공합니다.
 - Prompt Studio의 비동기 작업 버튼('실행', '프롬프트 저장')이 로딩 중일 때 `aria-busy` 속성을 가지도록 개선하여 스크린 리더 접근성을 향상했습니다.
 
+### 코드 건강성 개선 (Code Health)
+
+- `backend/tests/test_tenant_config_api.py` 내의 `test_create_read_pop3_postgres_smoke` 함수의 복잡한 설정 로직을 `pytest` fixture로 분리하여 코드 가독성과 유지보수성을 개선했습니다.
+
 ### 성능 개선 (Performance)
 
 - `get_emails` API 응답 속도 개선. Python 3.7+ 이상의 딕셔너리 삽입 순서 보장 특성을 활용하여, 불필요한 배열 뒤집기(`reverse()`)와 2차 정렬(`O(N log N)`) 작업을 제거하였습니다. 이를 통해 API 응답 속도와 메모리 사용량을 최적화했습니다.

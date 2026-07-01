@@ -1,13 +1,15 @@
 from types import SimpleNamespace
 
 import pytest
+import pytest_asyncio
 from cryptography.fernet import Fernet
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
-from main import app
+
 from db.session import get_db
+from main import app
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
 
@@ -441,9 +443,18 @@ def test_tenant_config_rejects_unsafe_pop3_port(client, monkeypatch):
 
 @pytest.mark.parametrize(
     "permitted_role",
-    ("system_admin", "platform_admin", "tenant_admin", "organization_admin", "group_admin", "member"),
+    (
+        "system_admin",
+        "platform_admin",
+        "tenant_admin",
+        "organization_admin",
+        "group_admin",
+        "member",
+    ),
 )
-def test_tenant_config_get_returns_own_config_for_permitted_role(client, permitted_role):
+def test_tenant_config_get_returns_own_config_for_permitted_role(
+    client, permitted_role
+):
     # GET /api/config enforces RBAC through ensure_mailbox_config_self_access and
     # always returns the authenticated session user's own config (no user_id parameter).
     response = client.get(
@@ -512,16 +523,99 @@ def test_global_config_allows_admin(client, admin_role):
     assert response.json()["status"] == "ok"
 
 
-@pytest.mark.postgres
-@pytest.mark.asyncio
-async def test_create_read_pop3_postgres_smoke(monkeypatch):
-    from asyncpg.exceptions import InvalidAuthorizationSpecificationError
-    from asyncpg.exceptions import InvalidPasswordError
-    from core.config import settings
-    from db.models import Base
+@pytest_asyncio.fixture(scope="function")
+async def smoke_db_engine():
+    from asyncpg.exceptions import (
+        InvalidAuthorizationSpecificationError,
+        InvalidPasswordError,
+    )
     from sqlalchemy import text
     from sqlalchemy.exc import OperationalError
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    from core.config import settings
+    from db.models import Base
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            await conn.run_sync(Base.metadata.create_all)
+        yield engine
+    except (
+        InvalidAuthorizationSpecificationError,
+        InvalidPasswordError,
+        OperationalError,
+        OSError,
+    ) as exc:
+        await engine.dispose()
+        pytest.skip(f"PostgreSQL smoke database unavailable: {exc}")
+    finally:
+        await engine.dispose()
+
+
+@pytest.fixture(scope="function")
+def smoke_sessionmaker(smoke_db_engine):
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    return async_sessionmaker(smoke_db_engine, expire_on_commit=False)
+
+
+@pytest_asyncio.fixture(scope="function")
+async def clean_smoke_user_db(smoke_sessionmaker):
+    from sqlalchemy import text
+
+    user_id = "pop3-smoke-user"
+
+    async def cleanup():
+        async with smoke_sessionmaker() as session:
+            await session.execute(
+                text("DELETE FROM tenant_configs WHERE user_id = :user_id"),
+                {"user_id": user_id},
+            )
+            await session.commit()
+
+    await cleanup()
+    yield user_id
+    await cleanup()
+
+
+@pytest.fixture(scope="function")
+def smoke_db_override(smoke_sessionmaker):
+    async def real_db_override():
+        async with smoke_sessionmaker() as session:
+            yield session
+
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = real_db_override
+    yield
+    if previous_db_override is None:
+        app.dependency_overrides.pop(get_db, None)
+    else:
+        app.dependency_overrides[get_db] = previous_db_override
+
+
+@pytest.fixture(scope="function")
+def smoke_encryption_key():
+    from core.config import settings
+
+    old_encryption_key = settings.ENCRYPTION_KEY
+    settings.ENCRYPTION_KEY = SecretStr(Fernet.generate_key().decode("ascii"))
+    yield
+    settings.ENCRYPTION_KEY = old_encryption_key
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_create_read_pop3_postgres_smoke(
+    monkeypatch,
+    smoke_sessionmaker,
+    clean_smoke_user_db,
+    smoke_db_override,
+    smoke_encryption_key,
+):
+    from sqlalchemy import text
 
     def fake_validate_pop3_destination(host, port, *, resolve_host=True):
         return host, port
@@ -531,83 +625,37 @@ async def test_create_read_pop3_postgres_smoke(monkeypatch):
         fake_validate_pop3_destination,
     )
 
-    old_encryption_key = settings.ENCRYPTION_KEY
-    settings.ENCRYPTION_KEY = SecretStr(Fernet.generate_key().decode("ascii"))
-    engine = create_async_engine(settings.DATABASE_URL)
-    try:
-        try:
-            async with engine.begin() as conn:
-                await conn.execute(text("SELECT 1"))
-                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-                await conn.run_sync(Base.metadata.create_all)
-        except (
-            InvalidAuthorizationSpecificationError,
-            InvalidPasswordError,
-            OperationalError,
-            OSError,
-        ) as exc:
-            await engine.dispose()
-            pytest.skip(f"PostgreSQL smoke database unavailable: {exc}")
+    user_id = clean_smoke_user_db
+    pop3_password = "pop3-smoke-secret"
 
-        Session = async_sessionmaker(engine, expire_on_commit=False)
-        user_id = "pop3-smoke-user"
-        pop3_password = "pop3-smoke-secret"
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        headers={"X-User-Id": user_id},
+        base_url="http://test",
+    ) as real_client:
+        post_response = await real_client.post(
+            "/api/config",
+            json={
+                "user_id": user_id,
+                "pop3_server": "pop3.example.com",
+                "pop3_port": 995,
+                "pop3_username": "pop3-user",
+                "pop3_password": pop3_password,
+            },
+        )
+        get_response = await real_client.get(
+            "/api/config",
+        )
 
-        async def cleanup_seed_rows():
-            async with Session() as session:
-                await session.execute(
-                    text("DELETE FROM tenant_configs WHERE user_id = :user_id"),
-                    {"user_id": user_id},
-                )
-                await session.commit()
-
-        async def real_db_override():
-            async with Session() as session:
-                yield session
-
-        await cleanup_seed_rows()
-        previous_db_override = app.dependency_overrides.get(get_db)
-        app.dependency_overrides[get_db] = real_db_override
-        try:
-            async with AsyncClient(
-                transport=ASGITransport(app=app),
-                headers={"X-User-Id": user_id},
-                base_url="http://test",
-            ) as real_client:
-                post_response = await real_client.post(
-                    "/api/config",
-                    json={
-                        "user_id": user_id,
-                        "pop3_server": "pop3.example.com",
-                        "pop3_port": 995,
-                        "pop3_username": "pop3-user",
-                        "pop3_password": pop3_password,
-                    },
-                )
-                get_response = await real_client.get(
-                    "/api/config",
-                )
-        finally:
-            if previous_db_override is None:
-                app.dependency_overrides.pop(get_db, None)
-            else:
-                app.dependency_overrides[get_db] = previous_db_override
-
-        async with Session() as session:
-            raw_pop3_password = (
-                await session.execute(
-                    text(
-                        "SELECT pop3_password FROM tenant_configs "
-                        "WHERE user_id = :user_id"
-                    ),
-                    {"user_id": user_id},
-                )
-            ).scalar_one()
-
-        await cleanup_seed_rows()
-    finally:
-        await engine.dispose()
-        settings.ENCRYPTION_KEY = old_encryption_key
+    async with smoke_sessionmaker() as session:
+        raw_pop3_password = (
+            await session.execute(
+                text(
+                    "SELECT pop3_password FROM tenant_configs WHERE user_id = :user_id"
+                ),
+                {"user_id": user_id},
+            )
+        ).scalar_one()
 
     assert post_response.status_code == 200
     assert get_response.status_code == 200
