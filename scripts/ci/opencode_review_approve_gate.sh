@@ -112,7 +112,7 @@ if ! jq -e '
     else ((.findings == null) or (.findings | type == "array" and length == 0))
     end
   )
-  and all((.findings // [])[];
+  and (all((.findings // [])[];
     (.path | type == "string" and length > 0)
     and ((.path | ascii_downcase) as $p | ($p != "n/a" and $p != "unknown"))
     and (.line | type == "number" and . > 0 and floor == .)
@@ -124,7 +124,7 @@ if ! jq -e '
     and (.regression_test_direction | type == "string" and length > 0)
     and (.suggested_diff | type == "string" and length > 0)
     and ((.suggested_diff | ascii_downcase) as $d | (($d | startswith("n/a")) | not) and (($d | startswith("cannot provide diff")) | not))
-  )
+  ))
 ' "$TMP_JSON" >/dev/null; then
   echo "NO_CONCLUSION"
   exit 4
