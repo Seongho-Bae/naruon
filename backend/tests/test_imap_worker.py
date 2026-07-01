@@ -110,14 +110,14 @@ async def test_imap_worker_imports_fetched_rfc822_messages(monkeypatch):
 
     assert imported_count == 1
 
-    imap_client.login.assert_called_once_with("imap-user@example.com", "imap-secret")
-    imap_client.select.assert_called_once_with("INBOX")
-    imap_client.search.assert_called_once_with("ALL")
-    imap_client.fetch.assert_called_once_with("1", "(RFC822)")
-    imap_client.logout.assert_called_once()
+    imap_client.login.assert_awaited_once_with("imap-user@example.com", "imap-secret")
+    imap_client.select.assert_awaited_once_with("INBOX")
+    imap_client.search.assert_awaited_once_with("ALL")
+    imap_client.fetch.assert_awaited_once_with("1", "(RFC822)")
+    imap_client.logout.assert_awaited_once()
 
-    process_fetched_email_mock.assert_called_once()
-    args, kwargs = process_fetched_email_mock.call_args
+    process_fetched_email_mock.assert_awaited_once()
+    args, kwargs = process_fetched_email_mock.await_args
     assert args[0] is session
     assert args[1]["message_id"] == "<imap-1@example.com>"
     assert args[1]["subject"] == "IMAP import"
@@ -125,8 +125,8 @@ async def test_imap_worker_imports_fetched_rfc822_messages(monkeypatch):
     assert args[3] == "org-imap"
     assert kwargs["owner_addresses"] == ["imap-user@example.com"]
 
-    session.commit.assert_called_once()
-    session.rollback.assert_not_called()
+    session.commit.assert_awaited_once()
+    session.rollback.assert_not_awaited()
 
 
 @pytest.mark.asyncio
