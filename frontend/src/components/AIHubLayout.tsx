@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   Activity,
@@ -13,6 +13,17 @@ import {
 } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
+import { Badge } from '@/components/ui/badge';
+import { Button, buttonVariants } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 type SurfaceStatus = 'loading' | 'ready' | 'error';
 type TabId = 'prompts' | 'workflows' | 'agents' | 'evaluation' | 'runs';
@@ -122,31 +133,59 @@ function stateLabel(stateCode: string) {
 
 function stateClassName(stateCode: string) {
   if (stateCode === 'active' || stateCode === 'ready' || stateCode === 'recorded' || stateCode === 'completed') {
-    return 'border-green-200 bg-green-50 text-green-700';
+    return 'border-green-200 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-200';
   }
   if (stateCode === 'failed') {
-    return 'border-red-200 bg-red-50 text-red-700';
+    return 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200';
   }
   if (stateCode === 'attention' || stateCode.startsWith('needs_')) {
-    return 'border-amber-200 bg-amber-50 text-amber-700';
+    return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200';
   }
   return 'border-border bg-secondary text-muted-foreground';
 }
 
 function StatusBadge({ stateCode }: { stateCode: string }) {
   return (
-    <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-bold ${stateClassName(stateCode)}`}>
+    <Badge variant="outline" className={cn('font-bold', stateClassName(stateCode))}>
       {stateLabel(stateCode)}
-    </span>
+    </Badge>
   );
 }
 
 function EmptyState({ title, detail }: { title: string; detail: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-border bg-card p-8 text-center">
-      <p className="font-bold text-foreground">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">{detail}</p>
-    </div>
+    <Card className="border-dashed text-center">
+      <CardContent className="py-8">
+        <p className="font-bold text-foreground">{title}</p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{detail}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ActionLink({
+  href,
+  children,
+  variant = 'outline',
+  size = 'sm',
+}: {
+  href: string;
+  children: ReactNode;
+  variant?: 'default' | 'outline' | 'secondary' | 'ghost' | 'destructive' | 'link';
+  size?: 'default' | 'sm';
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        buttonVariants({ variant, size }),
+        'text-xs font-black',
+        variant === 'default' && 'hover:!bg-primary/90',
+        variant === 'outline' && 'hover:!border-primary/30 hover:!text-primary',
+      )}
+    >
+      {children}
+    </Link>
   );
 }
 
@@ -161,14 +200,18 @@ function SummaryGrid({ cards }: { cards: SummaryCard[] }) {
   return (
     <section aria-label="AI 허브 원본 기반 종합" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {cards.map((card) => (
-        <article key={card.summary_key} className="rounded-lg border border-border bg-card p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-sm font-bold text-muted-foreground">{getKoreanFirstLabel(card.label_text)}</p>
-            <StatusBadge stateCode={card.state_code} />
-          </div>
-          <p className="mt-4 text-3xl font-black text-foreground">{card.value_text}</p>
-          <p className="mt-1 text-xs font-semibold text-muted-foreground">{card.detail_text}</p>
-        </article>
+        <Card key={card.summary_key} size="sm">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <CardDescription className="text-sm font-bold">{getKoreanFirstLabel(card.label_text)}</CardDescription>
+              <StatusBadge stateCode={card.state_code} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-black text-foreground">{card.value_text}</p>
+            <p className="mt-1 text-xs font-semibold text-muted-foreground">{card.detail_text}</p>
+          </CardContent>
+        </Card>
       ))}
     </section>
   );
@@ -181,39 +224,33 @@ function PromptPanel({ prompts }: { prompts: PromptCard[] }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {prompts.map((prompt) => (
-        <article key={prompt.prompt_key} className="rounded-lg border border-border bg-card p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="truncate text-base font-black">{prompt.prompt_title}</h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{prompt.description_text ?? '프롬프트 설명이 등록되지 않았습니다.'}</p>
+        <Card key={prompt.prompt_key}>
+          <CardHeader>
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0">
+                <CardTitle className="truncate font-black">{prompt.prompt_title}</CardTitle>
+                <CardDescription className="mt-2 leading-6">{prompt.description_text ?? '프롬프트 설명이 등록되지 않았습니다.'}</CardDescription>
+              </div>
+              <StatusBadge stateCode={prompt.shared_scope ? 'ready' : 'configured'} />
             </div>
-            <StatusBadge stateCode={prompt.shared_scope ? 'ready' : 'configured'} />
-          </div>
-          <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="font-bold text-muted-foreground">소유자</dt>
-              <dd className="mt-1 font-semibold">{prompt.owner_label}</dd>
-            </div>
-            <div>
-              <dt className="font-bold text-muted-foreground">업데이트</dt>
-              <dd className="mt-1 font-semibold">{formatDateTime(prompt.updated_at)}</dd>
-            </div>
-          </dl>
-          <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-border pt-4">
-            <Link
-              href="/prompt-studio"
-              className="inline-flex h-9 items-center rounded-lg border border-border bg-background px-3 text-xs font-black text-foreground hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-            >
-              프롬프트 열기
-            </Link>
-            <Link
-              href="/ai-hub#actions"
-              className="inline-flex h-9 items-center rounded-lg bg-primary px-3 text-xs font-black text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-            >
-              실행 항목 보기
-            </Link>
-          </div>
-        </article>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="font-bold text-muted-foreground">소유자</dt>
+                <dd className="mt-1 font-semibold">{prompt.owner_label}</dd>
+              </div>
+              <div>
+                <dt className="font-bold text-muted-foreground">업데이트</dt>
+                <dd className="mt-1 font-semibold">{formatDateTime(prompt.updated_at)}</dd>
+              </div>
+            </dl>
+          </CardContent>
+          <CardFooter className="justify-end gap-2">
+            <ActionLink href="/prompt-studio">프롬프트 열기</ActionLink>
+            <ActionLink href="/ai-hub#actions" variant="default">실행 항목 보기</ActionLink>
+          </CardFooter>
+        </Card>
       ))}
     </div>
   );
@@ -226,23 +263,29 @@ function WorkflowPanel({ workflows, onOpenRuns }: { workflows: WorkflowCard[]; o
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {workflows.map((workflow) => (
-        <article key={workflow.workflow_key} className="rounded-lg border border-border bg-card p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <h2 className="text-base font-black">{workflow.workflow_title}</h2>
-            <StatusBadge stateCode={workflow.state_code} />
-          </div>
-          <p className="mt-4 text-sm font-bold text-primary">{workflow.trigger_source}</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{workflow.evidence_text}</p>
-          <div className="mt-5 flex justify-end border-t border-border pt-4">
-            <button
+        <Card key={workflow.workflow_key}>
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <CardTitle className="font-black">{workflow.workflow_title}</CardTitle>
+              <StatusBadge stateCode={workflow.state_code} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm font-bold text-primary">{workflow.trigger_source}</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{workflow.evidence_text}</p>
+          </CardContent>
+          <CardFooter className="justify-end">
+            <Button
               type="button"
               onClick={onOpenRuns}
-              className="inline-flex h-9 items-center rounded-lg border border-border bg-background px-3 text-xs font-black text-foreground hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              variant="outline"
+              size="sm"
+              className="text-xs font-black"
             >
               실행 이력 보기
-            </button>
-          </div>
-        </article>
+            </Button>
+          </CardFooter>
+        </Card>
       ))}
     </div>
   );
@@ -255,31 +298,30 @@ function AgentsPanel({ agents }: { agents: AgentCard[] }) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       {agents.map((agent) => (
-        <article key={agent.agent_key} className="rounded-lg border border-border bg-card p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <h2 className="text-base font-black">{agent.agent_title}</h2>
-            <StatusBadge stateCode={agent.state_code} />
-          </div>
-          <dl className="mt-5 space-y-3 text-sm">
-            <div className="flex items-center justify-between gap-3">
-              <dt className="font-bold text-muted-foreground">모델</dt>
-              <dd className="font-semibold">{agent.model_label}</dd>
+        <Card key={agent.agent_key}>
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <CardTitle className="font-black">{agent.agent_title}</CardTitle>
+              <StatusBadge stateCode={agent.state_code} />
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="font-bold text-muted-foreground">연결 상태</dt>
-              <dd className="font-semibold">{agent.configured ? '연결됨' : '연결 필요'}</dd>
-            </div>
-          </dl>
-          <p className="mt-4 text-xs leading-5 text-muted-foreground">{agent.governance_text}</p>
-          <div className="mt-5 flex justify-end border-t border-border pt-4">
-            <Link
-              href="/settings"
-              className="inline-flex h-9 items-center rounded-lg border border-border bg-background px-3 text-xs font-black text-foreground hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-            >
-              모델 설정 열기
-            </Link>
-          </div>
-        </article>
+          </CardHeader>
+          <CardContent>
+            <dl className="space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="font-bold text-muted-foreground">모델</dt>
+                <dd className="font-semibold">{agent.model_label}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="font-bold text-muted-foreground">연결 상태</dt>
+                <dd className="font-semibold">{agent.configured ? '연결됨' : '연결 필요'}</dd>
+              </div>
+            </dl>
+            <p className="mt-4 text-xs leading-5 text-muted-foreground">{agent.governance_text}</p>
+          </CardContent>
+          <CardFooter className="justify-end">
+            <ActionLink href="/settings">모델 설정 열기</ActionLink>
+          </CardFooter>
+        </Card>
       ))}
     </div>
   );
@@ -289,25 +331,31 @@ function EvaluationPanel({ metrics, onOpenRuns }: { metrics: EvaluationMetric[];
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {metrics.map((metric) => (
-        <article key={metric.metric_key} className="rounded-lg border border-border bg-card p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-base font-black">{getKoreanFirstLabel(metric.metric_label)}</h2>
-            <span className="text-2xl font-black text-primary">{metric.score_value}</span>
-          </div>
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-secondary">
-            <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(metric.score_value, 100))}%` }} />
-          </div>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">{metric.trend_text}</p>
-          <div className="mt-5 flex justify-end border-t border-border pt-4">
-            <button
+        <Card key={metric.metric_key}>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-4">
+              <CardTitle className="font-black">{getKoreanFirstLabel(metric.metric_label)}</CardTitle>
+              <span className="text-2xl font-black text-primary">{metric.score_value}</span>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-2 overflow-hidden rounded-full bg-secondary">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(metric.score_value, 100))}%` }} />
+            </div>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">{metric.trend_text}</p>
+          </CardContent>
+          <CardFooter className="justify-end">
+            <Button
               type="button"
               onClick={onOpenRuns}
-              className="inline-flex h-9 items-center rounded-lg border border-border bg-background px-3 text-xs font-black text-foreground hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              variant="outline"
+              size="sm"
+              className="text-xs font-black"
             >
               평가 근거 보기
-            </button>
-          </div>
-        </article>
+            </Button>
+          </CardFooter>
+        </Card>
       ))}
     </div>
   );
@@ -318,7 +366,7 @@ function RunHistoryPanel({ events }: { events: RunEvent[] }) {
     return <EmptyState title="기록된 실행 증거가 없습니다." detail="에이전트 실행 row 또는 운영 감사 근거가 생기면 실행 근거로 정렬됩니다." />;
   }
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+    <Card className="py-0">
       <div className="grid grid-cols-[minmax(0,1fr)_9rem_8rem] gap-4 border-b border-border px-4 py-3 text-xs font-black text-muted-foreground max-md:hidden">
         <span>이벤트</span>
         <span>증거</span>
@@ -339,7 +387,7 @@ function RunHistoryPanel({ events }: { events: RunEvent[] }) {
           </article>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -354,7 +402,7 @@ function ExecutionCheckpointNav() {
         <a
           key={item.href}
           href={item.href}
-          className="inline-flex h-10 shrink-0 items-center rounded-lg border border-border bg-card px-3 text-sm font-black text-foreground shadow-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          className={cn(buttonVariants({ variant: 'outline', size: 'default' }), 'text-sm font-black')}
         >
           {item.label}
         </a>
@@ -379,18 +427,22 @@ function CheckpointSection({
     <section
       id={id}
       aria-labelledby={titleId}
-      className="scroll-mt-24 rounded-lg border border-border bg-card p-5 shadow-sm"
+      className="scroll-mt-24"
     >
-      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-xs font-black text-primary">연결 근거</p>
-          <h2 id={titleId} className="mt-1 text-xl font-black">
-            {title}
-          </h2>
-        </div>
-        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{detail}</p>
-      </div>
-      <div className="mt-5">{children}</div>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs font-black text-primary">연결 근거</p>
+              <CardTitle id={titleId} className="mt-1 text-xl font-black">
+                {title}
+              </CardTitle>
+            </div>
+            <CardDescription className="max-w-2xl leading-6">{detail}</CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent>{children}</CardContent>
+      </Card>
     </section>
   );
 }
@@ -402,25 +454,29 @@ function ContextCheckpoint({ prompts }: { prompts: PromptCard[] }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
       {prompts.slice(0, 4).map((prompt) => (
-        <article key={prompt.prompt_key} className="rounded-lg border border-border bg-background p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h3 className="text-base font-black">{prompt.prompt_title}</h3>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{prompt.description_text ?? '프롬프트 설명이 등록되지 않았습니다.'}</p>
+        <Card key={prompt.prompt_key} size="sm" className="bg-background">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <CardTitle className="font-black">{prompt.prompt_title}</CardTitle>
+                <CardDescription className="mt-2 leading-6">{prompt.description_text ?? '프롬프트 설명이 등록되지 않았습니다.'}</CardDescription>
+              </div>
+              <StatusBadge stateCode={prompt.shared_scope ? 'ready' : 'configured'} />
             </div>
-            <StatusBadge stateCode={prompt.shared_scope ? 'ready' : 'configured'} />
-          </div>
-          <dl className="mt-4 flex flex-wrap gap-3 text-xs font-bold text-muted-foreground">
-            <div>
-              <dt className="sr-only">소유자</dt>
-              <dd>{prompt.owner_label}</dd>
-            </div>
-            <div>
-              <dt className="sr-only">업데이트</dt>
-              <dd>{formatDateTime(prompt.updated_at)}</dd>
-            </div>
-          </dl>
-        </article>
+          </CardHeader>
+          <CardContent>
+            <dl className="flex flex-wrap gap-3 text-xs font-bold text-muted-foreground">
+              <div>
+                <dt className="sr-only">소유자</dt>
+                <dd>{prompt.owner_label}</dd>
+              </div>
+              <div>
+                <dt className="sr-only">업데이트</dt>
+                <dd>{formatDateTime(prompt.updated_at)}</dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );
@@ -435,36 +491,44 @@ function DecisionCheckpoint({ metrics, agents }: { metrics: EvaluationMetric[]; 
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="grid gap-3 md:grid-cols-2">
         {visibleMetrics.map((metric) => (
-          <article key={metric.metric_key} className="rounded-lg border border-border bg-background p-4">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-black">{getKoreanFirstLabel(metric.metric_label)}</h3>
-              <span className="text-xl font-black text-primary">{metric.score_value}</span>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary">
-              <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(metric.score_value, 100))}%` }} />
-            </div>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">{metric.trend_text}</p>
-          </article>
+          <Card key={metric.metric_key} size="sm" className="bg-background">
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-sm font-black">{getKoreanFirstLabel(metric.metric_label)}</CardTitle>
+                <span className="text-xl font-black text-primary">{metric.score_value}</span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(metric.score_value, 100))}%` }} />
+              </div>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">{metric.trend_text}</p>
+            </CardContent>
+          </Card>
         ))}
       </div>
-      <aside className="rounded-lg border border-border bg-background p-4">
-        <h3 className="text-sm font-black">모델 판단 보조</h3>
-        {agents.length === 0 ? (
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">조직 모델 연결이 없으면 실행 판단은 대기 상태로 표시됩니다.</p>
-        ) : (
-          <ul className="mt-3 space-y-3">
-            {agents.slice(0, 3).map((agent) => (
-              <li key={agent.agent_key} className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-black">{agent.agent_title}</p>
-                  <p className="text-xs font-semibold text-muted-foreground">{agent.model_label}</p>
-                </div>
-                <StatusBadge stateCode={agent.state_code} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </aside>
+      <Card size="sm" className="bg-background">
+        <CardHeader>
+          <CardTitle className="text-sm font-black">모델 판단 보조</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {agents.length === 0 ? (
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">조직 모델 연결이 없으면 실행 판단은 대기 상태로 표시됩니다.</p>
+          ) : (
+            <ul className="space-y-3">
+              {agents.slice(0, 3).map((agent) => (
+                <li key={agent.agent_key} className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black">{agent.agent_title}</p>
+                    <p className="text-xs font-semibold text-muted-foreground">{agent.model_label}</p>
+                  </div>
+                  <StatusBadge stateCode={agent.state_code} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -477,33 +541,41 @@ function ActionsCheckpoint({ workflows, events }: { workflows: WorkflowCard[]; e
           <EmptyState title="실행 항목 후보가 없습니다." detail="저장된 프롬프트와 활성 모델 연결이 준비되면 실행 흐름 후보가 생성됩니다." />
         ) : (
           workflows.slice(0, 4).map((workflow) => (
-            <article key={workflow.workflow_key} className="rounded-lg border border-border bg-background p-4">
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="text-sm font-black">{workflow.workflow_title}</h3>
-                <StatusBadge stateCode={workflow.state_code} />
-              </div>
-              <p className="mt-3 text-sm font-bold text-primary">{workflow.trigger_source}</p>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{workflow.evidence_text}</p>
-            </article>
+            <Card key={workflow.workflow_key} size="sm" className="bg-background">
+              <CardHeader>
+                <div className="flex items-start justify-between gap-3">
+                  <CardTitle className="text-sm font-black">{workflow.workflow_title}</CardTitle>
+                  <StatusBadge stateCode={workflow.state_code} />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm font-bold text-primary">{workflow.trigger_source}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{workflow.evidence_text}</p>
+              </CardContent>
+            </Card>
           ))
         )}
       </div>
-      <aside className="rounded-lg border border-border bg-background p-4">
-        <h3 className="text-sm font-black">최근 실행 근거</h3>
-        {events.length === 0 ? (
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">기록된 실행 근거가 없습니다.</p>
-        ) : (
-          <ul className="mt-3 space-y-3">
-            {events.slice(0, 3).map((event) => (
-              <li key={event.event_key} className="text-sm">
-                <p className="font-black">{event.event_title}</p>
-                <p className="mt-1 font-semibold text-primary">{event.evidence_source}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(event.observed_at)}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </aside>
+      <Card size="sm" className="bg-background">
+        <CardHeader>
+          <CardTitle className="text-sm font-black">최근 실행 근거</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {events.length === 0 ? (
+            <p className="text-sm leading-6 text-muted-foreground">기록된 실행 근거가 없습니다.</p>
+          ) : (
+            <ul className="space-y-3">
+              {events.slice(0, 3).map((event) => (
+                <li key={event.event_key} className="text-sm">
+                  <p className="font-black">{event.event_title}</p>
+                  <p className="mt-1 font-semibold text-primary">{event.evidence_source}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(event.observed_at)}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -546,6 +618,35 @@ export function AIHubLayout() {
     () => tabs.find((tab) => tab.id === activeTab)?.label ?? 'AI 허브',
     [activeTab],
   );
+  const activePanelId = `ai-hub-panel-${activeTab}`;
+  const activeTabId = `ai-hub-tab-${activeTab}`;
+
+  const focusTab = (tabId: TabId) => {
+    setActiveTab(tabId);
+    window.requestAnimationFrame(() => {
+      document.getElementById(`ai-hub-tab-${tabId}`)?.focus();
+    });
+  };
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, currentIndex: number) => {
+    const lastIndex = tabs.length - 1;
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      focusTab(tabs[currentIndex === lastIndex ? 0 : currentIndex + 1].id);
+    }
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      focusTab(tabs[currentIndex === 0 ? lastIndex : currentIndex - 1].id);
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      focusTab(tabs[0].id);
+    }
+    if (event.key === 'End') {
+      event.preventDefault();
+      focusTab(tabs[lastIndex].id);
+    }
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
@@ -555,28 +656,37 @@ export function AIHubLayout() {
             <Sparkles className="size-6 text-primary" aria-hidden="true" />
             AI 허브
           </h1>
-          <button
+          <Button
             type="button"
             onClick={requestRefresh}
             disabled={surfaceStatus === 'loading'}
             aria-busy={surfaceStatus === 'loading'}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-bold hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60"
+            variant="outline"
+            size="default"
+            className="font-bold"
           >
             <RefreshCw className={`size-4 ${surfaceStatus === 'loading' ? 'animate-spin' : ''}`} aria-hidden="true" />
             {surfaceStatus === 'loading' ? '새로고침 중' : '새로고침'}
-          </button>
+          </Button>
         </div>
-        <nav aria-label="AI 허브 섹션" className="mt-4 flex gap-2 overflow-x-auto pb-1">
-          {tabs.map((tab) => (
+        <nav aria-label="AI 허브 섹션" role="tablist" className="mt-4 flex gap-2 overflow-x-auto pb-1">
+          {tabs.map((tab, index) => (
             <button
               key={tab.id}
+              id={`ai-hub-tab-${tab.id}`}
+              data-slot="button"
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
-                activeTab === tab.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'border border-border bg-background text-muted-foreground hover:bg-secondary'
-              }`}
+              onKeyDown={(event) => handleTabKeyDown(event, index)}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={activeTab === tab.id ? `ai-hub-panel-${tab.id}` : undefined}
+              tabIndex={activeTab === tab.id ? 0 : -1}
+              className={cn(
+                buttonVariants({ variant: activeTab === tab.id ? 'default' : 'outline', size: 'default' }),
+                'font-bold',
+                activeTab !== tab.id && 'text-muted-foreground hover:text-foreground',
+              )}
             >
               <tab.icon className="size-4" aria-hidden="true" />
               {tab.label}
@@ -588,22 +698,28 @@ export function AIHubLayout() {
       <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-background p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:p-8">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
           {surfaceStatus === 'loading' && (
-            <div role="status" aria-live="polite" className="rounded-lg border border-border bg-card p-6 font-bold text-primary">
-              AI 허브 원본 근거를 불러오는 중입니다.
-            </div>
+            <Card role="status" aria-live="polite">
+              <CardContent className="py-6 font-bold text-primary">
+                AI 허브 원본 근거를 불러오는 중입니다.
+              </CardContent>
+            </Card>
           )}
 
           {surfaceStatus === 'error' && (
-            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-700">
+            <Card role="alert" className="border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-200">
+              <CardContent className="py-6">
               <p className="font-black">{errorText}</p>
-              <button
+              <Button
                 type="button"
                 onClick={requestRefresh}
-                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                variant="destructive"
+                size="default"
+                className="mt-4 font-bold"
               >
                 다시 시도
-              </button>
-            </div>
+              </Button>
+              </CardContent>
+            </Card>
           )}
 
           {surfaceStatus === 'ready' && surface && (
@@ -631,7 +747,13 @@ export function AIHubLayout() {
               >
                 <ActionsCheckpoint workflows={surface.workflow_cards} events={surface.run_events} />
               </CheckpointSection>
-              <section aria-label={activeTabLabel} className="min-h-[24rem]">
+              <section
+                id={activePanelId}
+                aria-label={activeTabLabel}
+                aria-labelledby={activeTabId}
+                role="tabpanel"
+                className="min-h-[24rem]"
+              >
                 {activeTab === 'prompts' && <PromptPanel prompts={surface.prompt_cards} />}
                 {activeTab === 'workflows' && <WorkflowPanel workflows={surface.workflow_cards} onOpenRuns={() => setActiveTab('runs')} />}
                 {activeTab === 'agents' && <AgentsPanel agents={surface.agent_cards} />}

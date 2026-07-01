@@ -125,6 +125,12 @@ function clickButton(container: HTMLElement, label: string) {
   });
 }
 
+function findTab(container: HTMLElement, label: string) {
+  return Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find((node) =>
+    node.textContent?.includes(label),
+  );
+}
+
 describe('AIHubPage', () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
@@ -176,17 +182,43 @@ describe('AIHubPage', () => {
     expect(container.textContent).toContain('의사결정 로그 맥락 종합');
     expect(container.textContent).toContain('프롬프트 열기');
     expect(container.textContent).toContain('실행 항목 보기');
+    expect(container.querySelector('[role="tablist"][aria-label="AI 허브 섹션"]')).not.toBeNull();
+    expect(container.querySelectorAll('[role="tab"]').length).toBe(5);
+    expect(container.querySelectorAll('[data-slot="card"]').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[data-slot="button"]').length).toBeGreaterThan(0);
+    expect(findTab(container, '프롬프트 스튜디오')?.getAttribute('aria-selected')).toBe('true');
+    expect(findTab(container, '프롬프트 스튜디오')?.getAttribute('aria-controls')).toBe(
+      'ai-hub-panel-prompts',
+    );
+    expect(findTab(container, '워크플로우')?.hasAttribute('aria-controls')).toBe(false);
+    expect(container.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toBe(
+      'ai-hub-tab-prompts',
+    );
     expect(container.querySelector('nav[aria-label="AI 허브 실행 체크포인트"]')?.textContent).toContain('맥락 종합');
     expect(container.querySelector('section[aria-labelledby="context-title"]')?.textContent).toContain('맥락 종합');
     expect(container.querySelector('section[aria-labelledby="decisions-title"]')?.textContent).toContain('판단 포인트');
     expect(container.querySelector('section[aria-labelledby="actions-title"]')?.textContent).toContain('실행 항목');
     expect(container.textContent).not.toContain('설명 없음');
 
-    clickButton(container, '워크플로우');
+    const promptStudioTab = findTab(container, '프롬프트 스튜디오');
+    act(() => {
+      promptStudioTab?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }),
+      );
+    });
+    expect(findTab(container, '워크플로우')?.getAttribute('aria-selected')).toBe('true');
+    expect(findTab(container, '프롬프트 스튜디오')?.hasAttribute('aria-controls')).toBe(false);
+    expect(findTab(container, '워크플로우')?.getAttribute('aria-controls')).toBe(
+      'ai-hub-panel-workflows',
+    );
+    expect(container.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toBe(
+      'ai-hub-tab-workflows',
+    );
     expect(container.textContent).toContain('의사결정 로그 자동 작성');
     expect(container.textContent).toContain('workflow_definition');
     expect(container.textContent).toContain('실행 이력 보기');
     clickButton(container, '실행 이력 보기');
+    expect(findTab(container, '실행 이력')?.getAttribute('aria-selected')).toBe('true');
     expect(container.textContent).toContain('워크플로우 실행');
 
     clickButton(container, '판단 보조');
