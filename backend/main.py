@@ -18,6 +18,7 @@ from api.runtime_config import router as runtime_config_router
 from api.llm_providers import router as llm_providers_router
 from api.prompts import router as prompts_router
 from api.tasks import router as tasks_router
+from api.tools import router as tools_router
 from api.ontology import router as ontology_router
 from api.observability import router as observability_router
 from api.runner_ws import manager as runner_manager
@@ -179,7 +180,6 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Strict-Transport-Security"] = (
         "max-age=31536000; includeSubDomains"
     )
-    response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
@@ -219,6 +219,7 @@ app.include_router(runtime_config_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(llm_providers_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(prompts_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(tasks_router, dependencies=PRIVATE_API_DEPENDENCIES)
+app.include_router(tools_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(ontology_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(observability_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(runner_ws_router, dependencies=PRIVATE_API_DEPENDENCIES)
