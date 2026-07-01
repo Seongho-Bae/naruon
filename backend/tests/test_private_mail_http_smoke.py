@@ -282,6 +282,18 @@ def test_fetch_inbox_snapshot_does_not_wait_when_min_count_is_zero(monkeypatch):
     assert len(calls) == 1
 
 
+def test_fetch_inbox_snapshot_rejects_empty_retry_budget():
+    with pytest.raises(SystemExit):
+        smoke._fetch_inbox_snapshot(
+            "http://127.0.0.1:8000",
+            "token",
+            limit=10,
+            min_count=1,
+            attempts=0,
+            delay_seconds=0.0,
+        )
+
+
 def test_fetch_search_snapshot_retries_until_results(monkeypatch):
     calls: list[dict[str, object]] = []
 
@@ -366,6 +378,17 @@ def test_fetch_search_snapshot_respects_cookie_only(monkeypatch):
 
     assert count == 0
     assert calls == [True]
+
+
+def test_fetch_search_snapshot_rejects_empty_retry_budget():
+    with pytest.raises(SystemExit):
+        smoke._fetch_search_snapshot(
+            "http://127.0.0.1:8000",
+            "token",
+            "hello",
+            attempts=0,
+            delay_seconds=0.0,
+        )
 
 
 def test_fetch_inbox_snapshot_uses_cookie_only_mode_when_requested(monkeypatch):

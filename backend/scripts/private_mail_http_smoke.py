@@ -507,6 +507,7 @@ def _fetch_inbox_snapshot(
     """Fetch /api/emails repeatedly until the minimum expected count is observed."""
     last_data: dict[str, object] = {}
     min_count = max(0, min_count)
+    _ensure_positive_retry_budget(attempts, "inbox-retry-attempts")
     for attempt in range(attempts):
         data = _get_json_with_retry(
             base_url,
@@ -540,6 +541,7 @@ def _fetch_search_snapshot(
 ) -> tuple[dict[str, object], int]:
     """Fetch /api/search repeatedly until query results are available."""
     last_data: dict[str, object] = {}
+    _ensure_positive_retry_budget(attempts, "search-retry-attempts")
     for attempt in range(attempts):
         data = _request_json_with_retry(
             base_url,
@@ -756,12 +758,13 @@ def main() -> None:
 
         expected_min_count = totals["imported"]
         api_limit = max(1, min(200, expected_min_count if expected_min_count else 1))
+        visible_min_count = min(expected_min_count, api_limit)
 
         api_inbox, email_count = _fetch_inbox_snapshot(
             api_base_url,
             token,
             limit=api_limit,
-            min_count=expected_min_count,
+            min_count=visible_min_count,
             attempts=args.inbox_retry_attempts if expected_min_count > 0 else 1,
             delay_seconds=args.inbox_retry_delay_seconds if expected_min_count > 0 else 0.0,
             timeout=120.0,
@@ -772,7 +775,7 @@ def main() -> None:
                 frontend_base_url,
                 token,
                 limit=api_limit,
-                min_count=expected_min_count,
+                min_count=visible_min_count,
                 use_cookie_only=True,
                 attempts=args.inbox_retry_attempts,
                 delay_seconds=args.inbox_retry_delay_seconds,
@@ -792,10 +795,10 @@ def main() -> None:
         if (
             args.require_browser_visible
             and expected_min_count > 0
-            and frontend_inbox_count < expected_min_count
+            and frontend_inbox_count < visible_min_count
         ):
             raise SystemExit(
-                f"browser inbox not reflecting import yet: imported={totals['imported']} frontend_inbox_count={frontend_inbox_count}"
+                f"browser inbox not reflecting import yet: imported={totals['imported']} visible_min_count={visible_min_count} frontend_inbox_count={frontend_inbox_count}"
             )
 
         search_counts: dict[str, int] = {}
