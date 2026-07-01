@@ -348,6 +348,30 @@ def test_oidc_settings_accept_complete_configuration(monkeypatch):
     assert loaded_settings.OIDC_CLIENT_ID == "naruon-api"
 
 
+def test_oidc_settings_reject_jwks_host_outside_issuer_domain(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+    )
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
+    monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.com/realms/naruon")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://jwks.example.com/realms/naruon/jwks")
+    monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "login.example.com,jwks.example.com")
+    _patch_oidc_dns(
+        monkeypatch,
+        {
+            "login.example.com": ["93.184.216.34"],
+            "jwks.example.com": ["93.184.216.34"],
+        },
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match="OIDC_JWKS_URL host must match or be a subdomain of OIDC_ISSUER_URL host",
+    ):
+        _settings_without_env_file()
+
+
 def test_oidc_settings_reject_hostname_resolving_private_address(monkeypatch):
     monkeypatch.setenv(
         "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"

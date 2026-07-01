@@ -37,6 +37,19 @@ def validate_https_url_host(
     )
 
 
+def validate_same_or_subdomain_host(
+    setting_name: str,
+    host: str,
+    base_setting_name: str,
+    base_host: str,
+) -> None:
+    if host == base_host or host.endswith(f".{base_host}"):
+        return
+    raise ValueError(
+        f"{setting_name} host must match or be a subdomain of {base_setting_name} host"
+    )
+
+
 def validate_https_url_host_details(
     setting_name: str,
     url_value: str,
