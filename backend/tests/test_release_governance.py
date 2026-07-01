@@ -245,7 +245,7 @@ def test_stepsecurity_remediation_adds_pinned_audit_hardening() -> None:
         ".github/workflows/dependency-review.yml"
     )
     assert (
-        "actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0"
+        "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0"
         in dependency_review_workflow
     )
 
