@@ -1,3 +1,4 @@
+import json
 from zipfile import ZipFile
 
 import pytest
@@ -95,7 +96,8 @@ def test_strip_emlx_prefix(raw, expected):
 def test_post_json_with_retry_retries_transient_statuses(monkeypatch):
     calls: list[tuple[str, str]] = []
 
-    def fake_request(base_url, token, method, path, *, body=None, content_type=None, timeout=120.0):
+    def fake_request(*args, **_unused):
+        method, path = args[2], args[3]
         calls.append((method, path))
         if len(calls) == 1:
             return 503, b"retry-later"
@@ -121,7 +123,8 @@ def test_post_json_with_retry_retries_transient_statuses(monkeypatch):
 def test_post_json_with_retry_stops_on_non_transient_status(monkeypatch):
     calls = []
 
-    def fake_request(base_url, token, method, path, *, body=None, content_type=None, timeout=120.0):
+    def fake_request(*args, **_unused):
+        method, path = args[2], args[3]
         calls.append((method, path))
         return 401, b"unauthorized"
 
@@ -148,7 +151,8 @@ def test_json_or_empty_raises_bad_response_for_html_payload():
 def test_request_json_with_retry_no_retry_after_bad_response(monkeypatch):
     calls: list[tuple[str, str]] = []
 
-    def fake_request(base_url, token, method, path, *, body=None, content_type=None, timeout=120.0):
+    def fake_request(*args, **_unused):
+        method, path = args[2], args[3]
         calls.append((method, path))
         return 200, b"<html></html>"
 
@@ -170,7 +174,8 @@ def test_request_json_with_retry_no_retry_after_bad_response(monkeypatch):
 def test_post_json_with_retry_retries_network_error(monkeypatch):
     calls: list[tuple[str, str]] = []
 
-    def fake_request(base_url, token, method, path, *, body=None, content_type=None, timeout=120.0):
+    def fake_request(*args, **_unused):
+        method, path = args[2], args[3]
         calls.append((method, path))
         if len(calls) == 1:
             raise smoke._RequestNetworkError("connection refused")
@@ -195,7 +200,8 @@ def test_post_json_with_retry_retries_network_error(monkeypatch):
 def test_post_json_with_retry_raises_network_error_after_retries(monkeypatch):
     calls: list[tuple[str, str]] = []
 
-    def fake_request(base_url, token, method, path, *, body=None, content_type=None, timeout=120.0):
+    def fake_request(*args, **_unused):
+        method, path = args[2], args[3]
         calls.append((method, path))
         raise smoke._RequestNetworkError("connection refused")
 
@@ -213,6 +219,205 @@ def test_post_json_with_retry_raises_network_error_after_retries(monkeypatch):
         )
 
     assert len(calls) == 2
+
+
+def test_fetch_inbox_snapshot_retries_until_minimum(monkeypatch):
+    calls: list[tuple[str, str]] = []
+
+    def fake_get_json_with_retry(
+        base_url: str,
+        token: str,
+        path: str,
+        *,
+        attempts: int,
+        delay_seconds: float,
+        timeout: float = 120.0,
+        **_unused,
+    ) -> dict[str, object]:
+        calls.append((base_url, path))
+        if len(calls) == 1:
+            return {"emails": []}
+        return {"emails": [{"id": "a"}, {"id": "b"}]}
+
+    monkeypatch.setattr(smoke, "_get_json_with_retry", fake_get_json_with_retry)
+    data, count = smoke._fetch_inbox_snapshot(
+        "http://127.0.0.1:8000",
+        "token",
+        limit=10,
+        min_count=2,
+        attempts=3,
+        delay_seconds=0.0,
+    )
+    assert count == 2
+    assert isinstance(data.get("emails"), list)
+    assert len(calls) == 2
+
+
+def test_fetch_inbox_snapshot_does_not_wait_when_min_count_is_zero(monkeypatch):
+    calls: list[tuple[str, str]] = []
+
+    def fake_get_json_with_retry(
+        base_url: str,
+        token: str,
+        path: str,
+        *,
+        attempts: int,
+        delay_seconds: float,
+        timeout: float = 120.0,
+        **_unused,
+    ) -> dict[str, object]:
+        calls.append((base_url, path))
+        return {"emails": []}
+
+    monkeypatch.setattr(smoke, "_get_json_with_retry", fake_get_json_with_retry)
+    _, count = smoke._fetch_inbox_snapshot(
+        "http://127.0.0.1:8000",
+        "token",
+        limit=10,
+        min_count=0,
+        attempts=3,
+        delay_seconds=0.0,
+    )
+    assert count == 0
+    assert len(calls) == 1
+
+
+def test_fetch_inbox_snapshot_rejects_empty_retry_budget():
+    with pytest.raises(SystemExit):
+        smoke._fetch_inbox_snapshot(
+            "http://127.0.0.1:8000",
+            "token",
+            limit=10,
+            min_count=1,
+            attempts=0,
+            delay_seconds=0.0,
+        )
+
+
+def test_fetch_search_snapshot_retries_until_results(monkeypatch):
+    calls: list[dict[str, object]] = []
+
+    def fake_request_json_with_retry(
+        base_url: str,
+        token: str,
+        method: str,
+        path: str,
+        *,
+        body: bytes,
+        content_type: str | None = None,
+        attempts: int,
+        delay_seconds: float,
+        timeout: float = 120.0,
+        use_cookie_only: bool = False,
+    ) -> dict[str, object]:
+        payload = json.loads(body.decode())
+        calls.append(
+            {
+                "method": method,
+                "path": path,
+                "query": payload["query"],
+                "limit": payload["limit"],
+                "content_type": content_type,
+                "use_cookie_only": use_cookie_only,
+            }
+        )
+        if len(calls) == 1:
+            return {"results": []}
+        return {"results": [{"id": "mail-001"}]}
+
+    monkeypatch.setattr(smoke, "_request_json_with_retry", fake_request_json_with_retry)
+    data, count = smoke._fetch_search_snapshot(
+        "http://127.0.0.1:8000",
+        "token",
+        "hello",
+        attempts=3,
+        delay_seconds=0.0,
+        limit=3,
+    )
+
+    assert count == 1
+    assert data["results"] == [{"id": "mail-001"}]
+    assert len(calls) == 2
+    assert calls[0]["method"] == "POST"
+    assert calls[0]["path"] == "/api/search"
+    assert calls[0]["query"] == "hello"
+    assert calls[0]["limit"] == 3
+    assert calls[0]["content_type"] == "application/json"
+    assert calls[0]["use_cookie_only"] is False
+
+
+def test_fetch_search_snapshot_respects_cookie_only(monkeypatch):
+    calls: list[bool] = []
+
+    def fake_request_json_with_retry(
+        base_url: str,
+        token: str,
+        method: str,
+        path: str,
+        *,
+        body: bytes,
+        content_type: str | None = None,
+        attempts: int,
+        delay_seconds: float,
+        timeout: float = 120.0,
+        use_cookie_only: bool = False,
+    ) -> dict[str, object]:
+        calls.append(use_cookie_only)
+        return {"results": []}
+
+    monkeypatch.setattr(smoke, "_request_json_with_retry", fake_request_json_with_retry)
+    _, count = smoke._fetch_search_snapshot(
+        "http://127.0.0.1:3000",
+        "token",
+        "korean",
+        attempts=1,
+        delay_seconds=0.0,
+        use_cookie_only=True,
+        limit=3,
+    )
+
+    assert count == 0
+    assert calls == [True]
+
+
+def test_fetch_search_snapshot_rejects_empty_retry_budget():
+    with pytest.raises(SystemExit):
+        smoke._fetch_search_snapshot(
+            "http://127.0.0.1:8000",
+            "token",
+            "hello",
+            attempts=0,
+            delay_seconds=0.0,
+        )
+
+
+def test_fetch_inbox_snapshot_uses_cookie_only_mode_when_requested(monkeypatch):
+    calls: list[tuple[str, bool, str]] = []
+
+    def fake_get_json_with_retry(
+        base_url: str,
+        token: str,
+        path: str,
+        *,
+        attempts: int,
+        delay_seconds: float,
+        use_cookie_only: bool = False,
+        timeout: float = 120.0,
+    ) -> dict[str, object]:
+        calls.append((base_url, use_cookie_only, path))
+        return {"emails": []}
+
+    monkeypatch.setattr(smoke, "_get_json_with_retry", fake_get_json_with_retry)
+    smoke._fetch_inbox_snapshot(
+        "http://127.0.0.1:3000",
+        "token",
+        limit=10,
+        min_count=0,
+        use_cookie_only=True,
+        attempts=1,
+        delay_seconds=0.0,
+    )
+    assert calls == [("http://127.0.0.1:3000", True, "/api/emails?limit=10")]
 
 
 def test_check_frontend_session_skips_on_missing_frontend(monkeypatch):
