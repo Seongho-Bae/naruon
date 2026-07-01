@@ -2582,3 +2582,7 @@
 - `POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build`
 - `python scripts/check_compose_logs.py --compose-log-file <captured-log-file>`
 - `docker compose down`
+
+## [Unreleased]
+
+- `scripts/ci/pr_review_merge_scheduler.py`의 `inspect_pr` 함수를 리팩토링하여 코드 가독성과 유지보수성을 향상시켰습니다.
