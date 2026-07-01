@@ -220,6 +220,48 @@ def test_github_actions_are_pinned_to_exact_sha() -> None:
     assert missing_version_comments == [], "\n".join(missing_version_comments)
 
 
+def test_stepsecurity_remediation_adds_pinned_audit_hardening() -> None:
+    harden_runner_ref = (
+        "step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4"
+    )
+    hardened_workflows = [
+        ".github/workflows/app-ci.yml",
+        ".github/workflows/bandit.yml",
+        ".github/workflows/codeql.yml",
+        ".github/workflows/dependency-review.yml",
+        ".github/workflows/docker-publish.yml",
+        ".github/workflows/mail-smoke.yml",
+        ".github/workflows/pr-governance.yml",
+        ".github/workflows/scorecard.yml",
+        ".github/workflows/trivy.yml",
+    ]
+
+    for workflow_path in hardened_workflows:
+        workflow = read_repo_text(workflow_path)
+        assert harden_runner_ref in workflow
+        assert "egress-policy: audit" in workflow
+
+    dependency_review_workflow = read_repo_text(
+        ".github/workflows/dependency-review.yml"
+    )
+    assert (
+        "actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0"
+        in dependency_review_workflow
+    )
+
+    pre_commit = read_repo_text(".pre-commit-config.yaml")
+    assert "https://github.com/gitleaks/gitleaks" in pre_commit
+    assert "rev: v8.16.3" in pre_commit
+    assert "https://github.com/jumanjihouse/pre-commit-hooks" in pre_commit
+    assert "rev: 3.0.0" in pre_commit
+    assert "https://github.com/pre-commit/mirrors-eslint" in pre_commit
+    assert "rev: v8.38.0" in pre_commit
+    assert "https://github.com/pre-commit/pre-commit-hooks" in pre_commit
+    assert "rev: v4.4.0" in pre_commit
+    assert "https://github.com/pylint-dev/pylint" in pre_commit
+    assert "rev: v2.17.2" in pre_commit
+
+
 def test_github_actions_unpinned_major_refs_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

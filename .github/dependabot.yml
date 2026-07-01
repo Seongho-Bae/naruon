@@ -53,3 +53,18 @@ updates:
       frontend-npm:
         patterns:
           - "*"
+
+  - package-ecosystem: docker
+    directory: /connector
+    schedule:
+      interval: daily
+
+  - package-ecosystem: pip
+    directory: /connector
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: daily
