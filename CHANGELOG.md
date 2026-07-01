@@ -8,6 +8,10 @@
 
 - `backend/tests/test_tenant_config_api.py` 내의 `test_create_read_pop3_postgres_smoke` 함수의 복잡한 설정 로직을 `pytest` fixture로 분리하여 코드 가독성과 유지보수성을 개선했습니다.
 
+### 코드 건강성 개선 (Code Health)
+
+- `backend/tests/test_webdav_api.py`의 복잡한 PostgreSQL smoke 테스트 설정을 재사용 가능한 DB 연결 확인 헬퍼와 인증/DB 클라이언트 컨텍스트 매니저로 분리했습니다.
+
 ### 성능 개선 (Performance)
 
 - `get_emails` API 응답 속도 개선. Python 3.7+ 이상의 딕셔너리 삽입 순서 보장 특성을 활용하여, 불필요한 배열 뒤집기(`reverse()`)와 2차 정렬(`O(N log N)`) 작업을 제거하였습니다. 이를 통해 API 응답 속도와 메모리 사용량을 최적화했습니다.
