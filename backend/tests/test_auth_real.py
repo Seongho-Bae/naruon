@@ -14,8 +14,6 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from api.auth import (
     AuthContext,
-    OIDC_ALLOWED_ALGORITHMS,
-    SESSION_ALLOWED_ALGORITHMS,
     SESSION_AUTH_RATE_LIMIT_MAX_FAILURES,
     _session_auth_failure_buckets,
     _auth_context_from_session_payload,
@@ -391,11 +389,11 @@ async def test_signed_bearer_session_decodes_with_fixed_hmac_algorithm_allowlist
 
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     token = _signed_session_token(_valid_session_payload())
-    decode_algorithms: list[tuple[str, ...]] = []
+    decode_algorithms: list[list[str]] = []
     decode_options: list[dict[str, object]] = []
 
     def mock_jwt_decode(*args, **kwargs):
-        decode_algorithms.append(tuple(kwargs["algorithms"]))
+        decode_algorithms.append(list(kwargs["algorithms"]))
         decode_options.append(dict(kwargs["options"]))
         return _valid_session_payload()
 
@@ -404,7 +402,7 @@ async def test_signed_bearer_session_decodes_with_fixed_hmac_algorithm_allowlist
     context = await get_auth_context(authorization=f"Bearer {token}")
 
     assert context.user_id == "alice"
-    assert decode_algorithms == [SESSION_ALLOWED_ALGORITHMS]
+    assert decode_algorithms == [["HS256"]]
     assert decode_options == [
         {"require": ("exp", "iss", "aud"), "verify_signature": True}
     ]
@@ -965,11 +963,11 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
     monkeypatch.setattr("api.auth.jwks_client", object())
     monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
 
-    decode_algorithms: list[tuple[str, ...]] = []
+    decode_algorithms: list[list[str]] = []
     decode_options: list[dict[str, object]] = []
 
     def mock_jwt_decode(*args, **kwargs):
-        decode_algorithms.append(tuple(kwargs["algorithms"]))
+        decode_algorithms.append(list(kwargs["algorithms"]))
         decode_options.append(dict(kwargs["options"]))
         return {
             "iss": "https://login.example.test/realms/naruon",
@@ -1000,7 +998,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
     assert context.role == "member"
     assert context.organization_id == "org-acme"
     assert context.session_verifier == "oidc"
-    assert decode_algorithms == [OIDC_ALLOWED_ALGORITHMS]
+    assert decode_algorithms == [["RS256"]]
     assert decode_options == [
         {"require": ("exp", "iss", "aud"), "verify_signature": True}
     ]
