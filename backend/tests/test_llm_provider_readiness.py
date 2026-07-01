@@ -36,6 +36,12 @@ from services.llm_provider_readiness import (
 
         # API key provided for local (should just return True fast)
         ("api-key-for-local", "ollama", None, None, True),
+
+        # Edge cases for optional and whitespace-only values
+        ("some-api-key", None, None, None, True),
+        (None, None, "http://localhost:11434", "llama3", False),
+        (None, "ollama", "   ", "llama3", False),
+        (None, "ollama", "http://localhost", "   ", False),
     ]
 )
 def test_is_llm_provider_configured(
