@@ -5,14 +5,23 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("lucide-react", () => ({
   AlertCircle: () => <svg aria-hidden="true" />,
+  BarChart3: () => <svg aria-hidden="true" />,
   CheckIcon: () => <svg aria-hidden="true" />,
   CheckCircle2: () => <svg aria-hidden="true" />,
+  Clock3: () => <svg aria-hidden="true" />,
   Code: () => <svg aria-hidden="true" />,
   FileText: () => <svg aria-hidden="true" />,
+  History: () => <svg aria-hidden="true" />,
+  LayoutTemplate: () => <svg aria-hidden="true" />,
+  ListChecks: () => <svg aria-hidden="true" />,
   Loader2: () => <svg aria-hidden="true" data-testid="loader" />,
+  MoreHorizontal: () => <svg aria-hidden="true" />,
   Play: () => <svg aria-hidden="true" />,
+  RefreshCw: () => <svg aria-hidden="true" />,
+  Rocket: () => <svg aria-hidden="true" />,
   Save: () => <svg aria-hidden="true" />,
   Share2: () => <svg aria-hidden="true" />,
+  SlidersHorizontal: () => <svg aria-hidden="true" />,
   Sparkles: () => <svg aria-hidden="true" />,
   Variable: () => <svg aria-hidden="true" />,
 }));
@@ -133,6 +142,24 @@ describe("PromptStudioPage", () => {
     ]) {
       expect(page.querySelector(`#${fieldId}`)).not.toBeNull();
       expect(page.querySelector(`label[for="${fieldId}"]`)).not.toBeNull();
+    }
+  });
+
+  it("renders the full Prompt Studio surface from the UI/UX reference", async () => {
+    const page = await renderPage();
+
+    for (const section of [
+      "프롬프트 템플릿",
+      "프롬프트 에디터",
+      "모델 및 설정",
+      "라이브 미리보기",
+      "품질 체크리스트",
+      "버전 히스토리",
+      "최근 테스트 결과",
+      "배포 이력",
+      "활용 지표",
+    ]) {
+      expect(page.textContent).toContain(section);
     }
   });
 
