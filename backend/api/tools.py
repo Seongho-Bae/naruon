@@ -1,8 +1,15 @@
+import inspect
+import json
+import logging
+from collections.abc import Callable
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Dict, Any, List, Optional
 
 router = APIRouter(prefix="/api", tags=["tools"])
+logger = logging.getLogger(__name__)
+ToolHandler = Callable[[Dict[str, Any]], Any]
 
 class ToolInfo(BaseModel):
     """Workspace automation tool metadata returned to the tools catalog UI."""
@@ -24,11 +31,15 @@ class ExecuteResponse(BaseModel):
 class ToolRegistry:
     def __init__(self):
         self._tools: Dict[str, ToolInfo] = {}
-        self._handlers: Dict[str, callable] = {}
+        self._handlers: Dict[str, ToolHandler] = {}
 
-    def register(self, tool_info: ToolInfo, handler: callable):
+    def register(self, tool_info: ToolInfo, handler: ToolHandler):
         self._tools[tool_info.code] = tool_info
         self._handlers[tool_info.code] = handler
+
+    def unregister(self, code: str) -> None:
+        self._tools.pop(code, None)
+        self._handlers.pop(code, None)
 
     def get_all(self) -> List[ToolInfo]:
         return list(self._tools.values())
@@ -40,13 +51,69 @@ class ToolRegistry:
         handler = self._handlers.get(code)
         if not handler:
             raise ValueError(f"No handler registered for tool {code}")
-        return await handler(params)
+        result = handler(self._validate_parameters(code, params))
+        if inspect.isawaitable(result):
+            return await result
+        return result
+
+    def _validate_parameters(self, code: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(params, dict):
+            raise ValueError("Tool parameters must be an object")
+
+        tool_info = self._tools.get(code)
+        schema = tool_info.parameters if tool_info else None
+        if not schema:
+            if params:
+                raise ValueError("Tool does not accept parameters")
+            return {}
+
+        unexpected_keys = set(params) - set(schema)
+        if unexpected_keys:
+            raise ValueError("Unexpected tool parameter")
+
+        validated: Dict[str, Any] = {}
+        for key, descriptor in schema.items():
+            if key not in params:
+                raise ValueError("Missing required tool parameter")
+            value = params[key]
+            expected_type = _parameter_type_name(descriptor)
+            if not _parameter_matches_type(value, expected_type):
+                raise ValueError("Invalid tool parameter type")
+            validated[key] = value
+        return validated
 
 registry = ToolRegistry()
 
 # Initialize default tools
 async def mock_handler(params: Dict[str, Any]) -> str:
-    return f"Mock execution successful with params: {params}"
+    encoded = json.dumps(params, ensure_ascii=False, sort_keys=True)
+    return f"Mock execution successful with params: {encoded}"
+
+
+def _parameter_type_name(descriptor: Any) -> str:
+    if isinstance(descriptor, str):
+        return descriptor.lower()
+    if isinstance(descriptor, dict):
+        return str(descriptor.get("type", "string")).lower()
+    return "string"
+
+
+def _parameter_matches_type(value: Any, expected_type: str) -> bool:
+    match expected_type:
+        case "string":
+            return isinstance(value, str)
+        case "number":
+            return isinstance(value, (int, float)) and not isinstance(value, bool)
+        case "integer":
+            return isinstance(value, int) and not isinstance(value, bool)
+        case "boolean":
+            return isinstance(value, bool)
+        case "array":
+            return isinstance(value, list)
+        case "object":
+            return isinstance(value, dict)
+        case _:
+            return isinstance(value, str)
 
 registry.register(
     ToolInfo(
@@ -134,5 +201,10 @@ async def execute_tool(code: str, request: ExecuteRequest) -> ExecuteResponse:
     try:
         result = await registry.execute(code, request.parameters)
         return ExecuteResponse(status="success", result=result, message="Execution successful")
-    except Exception as e:
-        return ExecuteResponse(status="failed", result=None, message=str(e))
+    except Exception:
+        logger.exception("Tool execution failed", extra={"tool_code": code})
+        return ExecuteResponse(
+            status="failed",
+            result=None,
+            message="Tool execution failed",
+        )

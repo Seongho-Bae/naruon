@@ -3,10 +3,13 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 import time
 import pytest
 
 from fastapi.testclient import TestClient
+
+os.environ.setdefault("AUTH_SESSION_HMAC_SECRET", secrets.token_urlsafe(48))
 
 from main import app
 from api.tools import registry, ToolInfo
@@ -111,6 +114,42 @@ async def test_execute_tool_success():
     assert "Mock execution successful" in data["result"]
     assert "123" in data["result"]
 
+
+def test_execute_tool_rejects_unexpected_parameter():
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/tools/thread_summarizer/execute",
+            headers={"Authorization": f"Bearer {_signed_session_token()}"},
+            json={
+                "parameters": {
+                    "thread_id": "123",
+                    "__proto__": {"polluted": True},
+                }
+            },
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "failed"
+    assert data["result"] is None
+    assert data["message"] == "Tool execution failed"
+
+
+def test_execute_tool_rejects_invalid_parameter_type():
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/tools/thread_summarizer/execute",
+            headers={"Authorization": f"Bearer {_signed_session_token()}"},
+            json={"parameters": {"thread_id": ["not", "a", "string"]}},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "failed"
+    assert data["result"] is None
+    assert data["message"] == "Tool execution failed"
+
+
 def test_execute_tool_not_found():
     with TestClient(app) as client:
         response = client.post(
@@ -123,23 +162,26 @@ def test_execute_tool_not_found():
 
 @pytest.mark.asyncio
 async def test_execute_tool_inactive():
-    # Temporarily add an inactive tool
-    registry.register(
-        ToolInfo(
-            code="inactive_tool",
-            name="Inactive Tool",
-            description="This tool is inactive",
-            category="Test",
-            is_active=False
-        ),
-        lambda p: "should not run"
-    )
-    with TestClient(app) as client:
-        response = client.post(
-            "/api/tools/inactive_tool/execute",
-            headers={"Authorization": f"Bearer {_signed_session_token()}"},
-            json={"parameters": {}}
+    try:
+        registry.register(
+            ToolInfo(
+                code="inactive_tool",
+                name="Inactive Tool",
+                description="This tool is inactive",
+                category="Test",
+                is_active=False
+            ),
+            lambda p: "should not run"
         )
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/tools/inactive_tool/execute",
+                headers={"Authorization": f"Bearer {_signed_session_token()}"},
+                json={"parameters": {}}
+            )
+    finally:
+        registry.unregister("inactive_tool")
+
     assert response.status_code == 400
     assert response.json() == {"detail": "Tool is not active"}
 
@@ -148,24 +190,54 @@ async def test_execute_tool_handler_error():
     async def error_handler(params):
         raise ValueError("Simulated error")
 
-    registry.register(
-        ToolInfo(
-            code="error_tool",
-            name="Error Tool",
-            description="This tool raises an error",
-            category="Test"
-        ),
-        error_handler
-    )
-
-    with TestClient(app) as client:
-        response = client.post(
-            "/api/tools/error_tool/execute",
-            headers={"Authorization": f"Bearer {_signed_session_token()}"},
-            json={"parameters": {}}
+    try:
+        registry.register(
+            ToolInfo(
+                code="error_tool",
+                name="Error Tool",
+                description="This tool raises an error",
+                category="Test"
+            ),
+            error_handler
         )
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/tools/error_tool/execute",
+                headers={"Authorization": f"Bearer {_signed_session_token()}"},
+                json={"parameters": {}}
+            )
+    finally:
+        registry.unregister("error_tool")
+
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "failed"
     assert data["result"] is None
-    assert "Simulated error" in data["message"]
+    assert data["message"] == "Tool execution failed"
+
+
+def test_execute_tool_sync_handler_success():
+    try:
+        registry.register(
+            ToolInfo(
+                code="sync_tool",
+                name="Sync Tool",
+                description="This tool returns synchronously",
+                category="Test",
+                parameters={"value": "string"},
+            ),
+            lambda params: {"received": params["value"]},
+        )
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/tools/sync_tool/execute",
+                headers={"Authorization": f"Bearer {_signed_session_token()}"},
+                json={"parameters": {"value": "ok"}},
+            )
+    finally:
+        registry.unregister("sync_tool")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["result"] == {"received": "ok"}

@@ -122,16 +122,24 @@ describe("ToolsPage", () => {
 
   it("executes a tool and shows the result", async () => {
     let executeCalled = false;
+    let executeBody: unknown;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url) => {
+      vi.fn(async (url, init) => {
         if (url.includes("/api/tools") && !url.includes("execute")) {
           return jsonResponse([
-            { code: "test_tool", name: "테스트 도구", description: "설명", category: "카테고리" },
+            {
+              code: "test_tool",
+              name: "테스트 도구",
+              description: "설명",
+              category: "카테고리",
+              parameters: { thread_id: "string", limit: "number" },
+            },
           ]);
         }
         if (url.includes("/api/tools/test_tool/execute")) {
           executeCalled = true;
+          executeBody = JSON.parse(String(init?.body));
           return jsonResponse({
             status: "success",
             result: "Execution OK",
@@ -160,6 +168,7 @@ describe("ToolsPage", () => {
     await flushAsyncWork();
 
     expect(executeCalled).toBe(true);
+    expect(executeBody).toEqual({ parameters: { thread_id: "test_value", limit: 0 } });
     expect(container.textContent).toContain("성공");
     expect(container.textContent).toContain("Success message");
   });
@@ -198,5 +207,24 @@ describe("ToolsPage", () => {
 
     expect(container.textContent).toContain("실패");
     expect(container.textContent).toContain("API request failed");
+  });
+
+  it("distinguishes a load failure from an empty tool list", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(null, false, 500)),
+    );
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(<ToolsPage />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("도구 목록을 불러오지 못했습니다.");
+    expect(container.textContent).not.toContain("사용 가능한 도구가 없습니다.");
   });
 });

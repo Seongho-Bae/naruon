@@ -20,9 +20,41 @@ interface ExecuteResponse {
   message?: string;
 }
 
+function buildDefaultParameters(tool: ToolInfo) {
+  return Object.fromEntries(
+    Object.entries(tool.parameters ?? {}).map(([key, descriptor]) => [
+      key,
+      defaultParameterValue(descriptor),
+    ]),
+  );
+}
+
+function defaultParameterValue(descriptor: unknown) {
+  const type =
+    typeof descriptor === "string"
+      ? descriptor
+      : descriptor && typeof descriptor === "object" && "type" in descriptor
+        ? String((descriptor as { type?: unknown }).type)
+        : "string";
+  switch (type.toLowerCase()) {
+    case "number":
+    case "integer":
+      return 0;
+    case "boolean":
+      return false;
+    case "array":
+      return [];
+    case "object":
+      return {};
+    default:
+      return "test_value";
+  }
+}
+
 export default function ToolsPage() {
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [executing, setExecuting] = useState<Record<string, boolean>>({});
   const [results, setResults] = useState<Record<string, ExecuteResponse>>({});
 
@@ -32,11 +64,15 @@ export default function ToolsPage() {
       .then((data) => {
         if (isMounted) {
           setTools(data);
+          setLoadError(false);
           setLoading(false);
         }
       })
       .catch(() => {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoadError(true);
+          setLoading(false);
+        }
       });
     return () => { isMounted = false; };
   }, []);
@@ -44,8 +80,8 @@ export default function ToolsPage() {
   const handleExecute = async (code: string) => {
     setExecuting(prev => ({ ...prev, [code]: true }));
     try {
-      // Mock parameters for demonstration
-      const params = { test_param: "test_value" };
+      const tool = tools.find((item) => item.code === code);
+      const params = tool ? buildDefaultParameters(tool) : {};
       const response = await apiClient.post<ExecuteResponse>(`/api/tools/${code}/execute`, { parameters: params });
       setResults(prev => ({ ...prev, [code]: response }));
     } catch (error: unknown) {
@@ -73,12 +109,12 @@ export default function ToolsPage() {
           </div>
         ) : tools.length === 0 ? (
           <div role="status" aria-live="polite" className="text-sm text-slate-500 bg-slate-50 p-6 rounded-xl border border-slate-200/60 text-center">
-            사용 가능한 도구가 없습니다.
+            {loadError ? "도구 목록을 불러오지 못했습니다. 잠시 후 다시 시도하세요." : "사용 가능한 도구가 없습니다."}
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {tools.map((tool, idx) => (
-              <div key={idx} className="bg-white p-6 rounded-xl border border-slate-200/60 shadow-sm transition-shadow hover:shadow-md flex flex-col h-full">
+            {tools.map((tool) => (
+              <div key={tool.code} className="bg-white p-6 rounded-xl border border-slate-200/60 shadow-sm transition-shadow hover:shadow-md flex flex-col h-full">
                 <div className="mb-4">
                   <span className="inline-block px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-full mb-3">
                     {tool.category}
