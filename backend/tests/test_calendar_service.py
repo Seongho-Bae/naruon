@@ -177,8 +177,8 @@ async def test_create_calendar_events_batch_chunks_large_batches(
     mock_build,
     monkeypatch,
 ):
-    fake_service = _FakeCalendarService()
-    mock_build.return_value = fake_service
+    fake_services = [_FakeCalendarService(), _FakeCalendarService()]
+    mock_build.side_effect = fake_services
     monkeypatch.setattr(
         "services.calendar_service.GOOGLE_CALENDAR_BATCH_MAX_REQUESTS",
         2,
@@ -190,8 +190,17 @@ async def test_create_calendar_events_batch_chunks_large_batches(
     )
 
     assert [event["summary"] for event in result] == ["One", "Two", "Three"]
-    assert [len(batch.requests) for batch in fake_service.batches] == [2, 1]
-    assert [batch.execute_count for batch in fake_service.batches] == [1, 1]
+    assert [len(service.batches) for service in fake_services] == [1, 1]
+    assert [
+        len(batch.requests)
+        for service in fake_services
+        for batch in service.batches
+    ] == [2, 1]
+    assert [
+        batch.execute_count
+        for service in fake_services
+        for batch in service.batches
+    ] == [1, 1]
 
 
 @pytest.mark.asyncio
@@ -213,8 +222,37 @@ async def test_create_calendar_events_batch_rejects_missing_callback_response(
 ):
     mock_build.return_value = _FakeCalendarService(missing_response_ids={"1"})
 
-    with pytest.raises(CalendarServiceError, match="Failed to create event in batch"):
+    with pytest.raises(CalendarServiceError, match="Failed to create events in batch"):
         await create_calendar_events_batch(
             ["Buy milk", "Call Alice"],
             _server_owned_google_credentials(),
         )
+
+
+@pytest.mark.asyncio
+@patch("services.calendar_service.build")
+async def test_create_calendar_events_batch_waits_for_all_chunks_before_failure(
+    mock_build,
+    monkeypatch,
+):
+    fake_services = [
+        _FakeCalendarService(missing_response_ids={"0"}),
+        _FakeCalendarService(),
+    ]
+    mock_build.side_effect = fake_services
+    monkeypatch.setattr(
+        "services.calendar_service.GOOGLE_CALENDAR_BATCH_MAX_REQUESTS",
+        1,
+    )
+
+    with pytest.raises(CalendarServiceError, match="Failed to create events in batch"):
+        await create_calendar_events_batch(
+            ["One", "Two"],
+            _server_owned_google_credentials(),
+        )
+
+    assert [
+        batch.execute_count
+        for service in fake_services
+        for batch in service.batches
+    ] == [1, 1]
