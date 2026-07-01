@@ -21,7 +21,7 @@ import Link from "next/link";
 
 import { apiClient } from "@/lib/api-client";
 
-const RelationContext = dynamic(() => import("@/components/RelationContext"), {
+const NetworkGraph = dynamic(() => import("@/components/NetworkGraph"), {
   ssr: false,
 });
 
@@ -188,7 +188,7 @@ function SenderDagPanel({
           </div>
         ) : null}
         {captureStatus === "error" ? (
-          <p role="alert" className="mt-2 text-xs font-bold text-destructive">
+          <p className="mt-2 text-xs font-bold text-destructive">
             발신자 관계 캡처에 실패했습니다.
           </p>
         ) : null}
@@ -509,14 +509,14 @@ export function SearchLayout() {
             <input
               id="search-input"
               ref={searchInputRef}
-              type="text"
+              type="search"
               inputMode="search"
               role="searchbox"
               aria-label="맥락 검색어 입력"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="메일, 일정, 파일, 사람, 의사결정 로그 맥락 검색..."
-              className="h-12 w-full rounded-full border-2 border-primary/20 bg-background pl-12 pr-12 text-base shadow-sm transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
+              className="h-12 w-full rounded-full border-2 border-primary/20 bg-background pl-12 pr-12 text-base shadow-sm transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 [&::-webkit-search-cancel-button]:hidden"
             />
             {query && (
               <button
@@ -792,7 +792,7 @@ export function SearchLayout() {
                       관계 맥락
                     </h4>
                     <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-lg border border-border bg-background shadow-inner">
-                      <RelationContext />
+                      <NetworkGraph />
                     </div>
                   </section>
 
