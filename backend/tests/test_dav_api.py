@@ -154,7 +154,7 @@ def test_dav_normalization_infinite_loop_prevention(monkeypatch):
         _normalize_dav_authorization_path("some/path")
 
     assert excinfo.value.status_code == 400
-    assert excinfo.value.detail == "Path too deeply encoded"
+    assert excinfo.value.detail == "DAV path decoding limit exceeded"
 
 
 def test_dav_rejects_double_encoded_traversal(dev_auth_dependency_overrides):

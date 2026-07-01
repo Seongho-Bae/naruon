@@ -234,7 +234,7 @@ def _oidc_unverified_header(token: str) -> dict[str, Any]:
     except Exception:
         raise _authentication_error() from None
     _reject_unsupported_critical_headers(header)
-    if header.get("alg") != "RS256":
+    if header.get("alg") not in OIDC_ALLOWED_ALGORITHMS:
         raise _authentication_error()
     key_id = header.get("kid")
     if not isinstance(key_id, str) or not key_id.strip():
@@ -376,7 +376,6 @@ def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVer
     if settings.OIDC_ISSUER_URL:
         if jwks_client is None:
             raise _authentication_error()
-
         try:
             payload = _decode_cached_oidc_session_payload(token)
             _reject_signed_session_admin_payload(payload)
@@ -388,7 +387,7 @@ def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVer
         header = jwt.get_unverified_header(token)
     except jwt.PyJWTError:
         raise _authentication_error() from None
-    if header.get("alg") != "HS256":
+    if header.get("alg") not in SESSION_ALLOWED_ALGORITHMS:
         raise _authentication_error()
     _reject_unsupported_critical_headers(header)
 

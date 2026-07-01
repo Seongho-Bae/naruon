@@ -21,7 +21,7 @@ def _normalize_dav_authorization_path(path: str) -> str:
         if decoded_path == normalized_path:
             return normalized_path
         normalized_path = decoded_path
-    raise HTTPException(status_code=400, detail="Path too deeply encoded")
+    raise HTTPException(status_code=400, detail="DAV path decoding limit exceeded")
 
 
 def _dav_path_owner_user_id(path: str) -> str | None:
