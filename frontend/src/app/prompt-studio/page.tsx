@@ -59,6 +59,13 @@ const DEFAULT_VARIABLE_VALUES = createVariableValueMap([
   ['email', '메일 내용 예시입니다.'],
 ]);
 
+const SAMPLE_VARIABLE_VALUES = createVariableValueMap([
+  ['email', '지난 분기 매출은 전년 대비 18% 증가했고, 고객 이탈률은 3.2%로 낮아졌습니다. 핵심 원인은 자동화 기능 도입입니다.'],
+  ['name', '김나루'],
+  ['project_name', 'Naruon Knowledge Hub'],
+  ['topic', 'AI 업무 자동화'],
+]);
+
 function getOwnVariableValue(values: VariableValues, key: string) {
   return Object.prototype.hasOwnProperty.call(values, key) ? values[key] : undefined;
 }
@@ -96,7 +103,6 @@ function getSafeErrorSummary(error: unknown, fallback: string) {
 const TEMPLATE_GROUPS = [
   {
     name: '업무 요약',
-    count: 16,
     items: [
       { id: 'summary', title: '문서 요약/초안 작성', favorite: true },
       { id: 'insight', title: '데이터 분석 인사이트' },
@@ -106,7 +112,6 @@ const TEMPLATE_GROUPS = [
   },
   {
     name: '회의/리포트',
-    count: 12,
     items: [
       { id: 'meeting', title: '회의록 작성' },
       { id: 'decision', title: '의사결정 요약' },
@@ -115,7 +120,6 @@ const TEMPLATE_GROUPS = [
   },
   {
     name: '고객 응대',
-    count: 14,
     items: [
       { id: 'customer', title: '고객 문의 답변' },
       { id: 'faq', title: 'FAQ 생성' },
@@ -124,7 +128,6 @@ const TEMPLATE_GROUPS = [
   },
   {
     name: '개발/기술',
-    count: 14,
     items: [
       { id: 'code', title: '코드 설명/주석' },
       { id: 'bug', title: '버그 분석' },
@@ -139,7 +142,11 @@ const PROMPT_TABS = [
   { id: 'assistant', label: '어시스턴트 예시' },
 ] as const;
 
-const MODEL_OPTIONS = ['Naruon GPT-4o Enterprise', 'Naruon Local Gemma', 'OpenAI Compatible'];
+const MODEL_OPTIONS = [
+  { label: 'Naruon GPT-4o Enterprise', value: 'gpt-4o' },
+  { label: 'Naruon Local Gemma', value: 'gemma-3-27b-it' },
+  { label: 'OpenAI Compatible', value: 'provider-default' },
+];
 const RESPONSE_STYLES = ['전문적이고 간결하게', '친근하고 상세하게', '실행 항목 중심'];
 const OUTPUT_FORMATS = ['마크다운 (Markdown)', 'JSON 구조화', '짧은 요약'];
 
@@ -172,6 +179,17 @@ const METRIC_CARDS = [
   { label: '평균 응답 시간', value: '2.6초', delta: '-0.3초' },
 ];
 
+type PromptSettings = {
+  model: string;
+  temperature: string;
+  responseStyle: string;
+  outputFormat: string;
+};
+
+function getModelLabel(modelValue: string) {
+  return MODEL_OPTIONS.find((model) => model.value === modelValue)?.label ?? modelValue;
+}
+
 export default function PromptStudioPage() {
   const [formData, setFormData] = useState<PromptFormData>({
     title: '',
@@ -181,12 +199,13 @@ export default function PromptStudioPage() {
   });
   const [activeTemplateId, setActiveTemplateId] = useState('summary');
   const [activePromptTab, setActivePromptTab] = useState<(typeof PROMPT_TABS)[number]['id']>('system');
-  const [promptSettings, setPromptSettings] = useState({
-    model: MODEL_OPTIONS[0],
+  const [promptSettings, setPromptSettings] = useState<PromptSettings>({
+    model: MODEL_OPTIONS[0].value,
     temperature: '0.3',
     responseStyle: RESPONSE_STYLES[0],
     outputFormat: OUTPUT_FORMATS[0],
   });
+  const [showTemplateCounts, setShowTemplateCounts] = useState(true);
   const promptVariables = useMemo(() => extractPromptVariables(formData.content), [formData.content]);
   const [variableValues, setVariableValues] = useState<VariableValues>(() =>
     createVariableValueMap(Object.entries(DEFAULT_VARIABLE_VALUES)),
@@ -210,6 +229,7 @@ export default function PromptStudioPage() {
   const setPromptContent = (content: string) => {
     setError(null);
     setSaveStatus(null);
+    setTestResult('');
     setFormData((current) => ({ ...current, content }));
     setVariableValues((currentValues) => syncVariableValues(extractPromptVariables(content), currentValues));
   };
@@ -223,10 +243,12 @@ export default function PromptStudioPage() {
     }));
     setError(null);
     setSaveStatus(null);
+    setTestResult('');
   };
 
   const setPromptSetting = (field: keyof typeof promptSettings, value: string) => {
     setPromptSettings((current) => ({ ...current, [field]: value }));
+    setTestResult('');
   };
 
   const buildVariablesPayload = () => {
@@ -235,6 +257,28 @@ export default function PromptStudioPage() {
       payload[variableName] = getOwnVariableValue(variableValues, variableName) ?? '';
     }
     return payload;
+  };
+
+  const buildPromptTestSettings = () => ({
+    model: promptSettings.model,
+    temperature: Number.parseFloat(promptSettings.temperature),
+    response_style: promptSettings.responseStyle,
+    output_format: promptSettings.outputFormat,
+  });
+
+  const loadSampleInput = () => {
+    setVariableValues(() => {
+      const nextValues = createVariableValueMap();
+      for (const variableName of promptVariables) {
+        nextValues[variableName] =
+          getOwnVariableValue(SAMPLE_VARIABLE_VALUES, variableName) ??
+          `${variableName} 샘플 값`;
+      }
+      return nextValues;
+    });
+    setError(null);
+    setSaveStatus(null);
+    setTestResult('');
   };
 
   const validateForSave = () => {
@@ -257,6 +301,7 @@ export default function PromptStudioPage() {
       const data = await apiClient.post<{ result?: string }>('/api/prompts/test', {
         content: formData.content,
         variables: buildVariablesPayload(),
+        settings: buildPromptTestSettings(),
       });
       setTestResult(data.result || '응답이 없습니다.');
     } catch (err: unknown) {
@@ -300,7 +345,7 @@ export default function PromptStudioPage() {
                 {formData.is_shared ? '워크스페이스 공유' : '개인 초안'}
               </Badge>
               <Badge variant="outline" className="font-black">
-                {promptSettings.model}
+                {getModelLabel(promptSettings.model)}
               </Badge>
             </div>
             <h1 className="mt-3 flex items-center gap-3 text-2xl font-black md:text-3xl">
@@ -362,7 +407,14 @@ export default function PromptStudioPage() {
                   <LayoutTemplate className="size-4 text-primary" aria-hidden="true" />
                   프롬프트 템플릿
                 </CardTitle>
-                <Button variant="ghost" size="icon-sm" aria-label="템플릿 메뉴">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="템플릿 개수 표시 전환"
+                  aria-pressed={showTemplateCounts}
+                  title="템플릿 개수 표시 전환"
+                  onClick={() => setShowTemplateCounts((current) => !current)}
+                >
                   <MoreHorizontal className="size-4" aria-hidden="true" />
                 </Button>
               </div>
@@ -373,7 +425,7 @@ export default function PromptStudioPage() {
                 <div key={group.name} className="grid gap-1">
                   <div className="flex items-center justify-between px-1 text-xs font-black text-muted-foreground">
                     <span>{group.name}</span>
-                    <span>{group.count}</span>
+                    {showTemplateCounts ? <span>{group.items.length}</span> : null}
                   </div>
                   {group.items.map((item) => {
                     const active = item.id === activeTemplateId;
@@ -504,7 +556,7 @@ export default function PromptStudioPage() {
                     onChange={(event) => setPromptSetting('model', event.target.value)}
                     className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   >
-                    {MODEL_OPTIONS.map((model) => <option key={model}>{model}</option>)}
+                    {MODEL_OPTIONS.map((model) => <option key={model.value} value={model.value}>{model.label}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1.5">
@@ -562,7 +614,7 @@ export default function PromptStudioPage() {
                   </div>
                   <Badge variant="outline" className="gap-1 font-black text-green-700 dark:text-green-300">
                     <CheckCircle2 className="size-3" aria-hidden="true" />
-                    자동 저장됨
+                    미리보기 동기화됨
                   </Badge>
                 </div>
               </CardHeader>
@@ -570,7 +622,7 @@ export default function PromptStudioPage() {
                 <div className="grid gap-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-black">샘플 입력</p>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={loadSampleInput} disabled={promptVariables.length === 0}>
                       <Variable className="size-3.5" aria-hidden="true" />
                       새 예시
                     </Button>
@@ -598,6 +650,7 @@ export default function PromptStudioPage() {
                               return nextValues;
                             });
                             setError(null);
+                            setTestResult('');
                           }}
                         />
                       </div>

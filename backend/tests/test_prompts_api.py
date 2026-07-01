@@ -278,6 +278,53 @@ def test_prompt_test_execution_mocked(auth_client, monkeypatch):
     assert "hello world" in captured["prompt_text"]
 
 
+def test_prompt_test_applies_preview_settings(auth_client, monkeypatch):
+    import api.prompts as prompts_module
+
+    captured = {}
+
+    async def mock_execute(prompt_text, *args, **kwargs):
+        captured["prompt_text"] = prompt_text
+        captured["kwargs"] = kwargs
+        return {"result": "Configured LLM result"}
+
+    monkeypatch.setattr(prompts_module, "execute_prompt_with_llm", mock_execute)
+
+    from db.models import LLMProvider
+
+    mock_session.items.append(
+        LLMProvider(
+            id=1,
+            user_id="testuser",
+            organization_id="org-acme",
+            name="Test",
+            provider_type="openai",
+            api_key="test-key",
+            is_active=True,
+        )
+    )
+
+    resp = auth_client.post(
+        "/api/prompts/test",
+        json={
+            "content": "Summarize this: {{email}}",
+            "variables": {"email": "hello world"},
+            "settings": {
+                "model": "gpt-4o",
+                "temperature": 0.6,
+                "response_style": "실행 항목 중심",
+                "output_format": "JSON 구조화",
+            },
+        },
+    )
+
+    assert resp.status_code == 200
+    assert captured["kwargs"]["model_name"] == "gpt-4o"
+    assert captured["kwargs"]["temperature"] == 0.6
+    assert "Response style: 실행 항목 중심" in captured["kwargs"]["system_message"]
+    assert "Output format: JSON 구조화" in captured["kwargs"]["system_message"]
+
+
 def test_prompt_test_wraps_variable_values_as_untrusted_data(auth_client, monkeypatch):
     import api.prompts as prompts_module
     from db.models import LLMProvider

@@ -71,6 +71,15 @@ function setControlValue(control: HTMLInputElement | HTMLTextAreaElement, value:
   });
 }
 
+function defaultPromptTestSettings() {
+  return {
+    model: "gpt-4o",
+    temperature: 0.3,
+    response_style: "전문적이고 간결하게",
+    output_format: "마크다운 (Markdown)",
+  };
+}
+
 function lowerCaseHeaders(headers: HeadersInit | undefined) {
   if (!headers) return {};
   if (headers instanceof Headers) {
@@ -190,12 +199,31 @@ describe("PromptStudioPage", () => {
         body: JSON.stringify({
           content: "핵심 맥락을 종합해주세요: {{email}}",
           variables: { email: "메일 내용 예시입니다." },
+          settings: defaultPromptTestSettings(),
         }),
         credentials: "same-origin",
         method: "POST",
       }),
     );
     expectNoPublicIdentityHeaders((fetchMock.mock.calls[0] as unknown as [RequestInfo, RequestInit?])?.[1]?.headers);
+
+    act(() => {
+      getButton(page, "데이터 분석 인사이트").click();
+    });
+    expect(page.textContent).not.toContain("맥락 종합 결과");
+  });
+
+  it("loads a fresh sample input from the preview panel", async () => {
+    const page = await renderPage();
+    const variableInput = page.querySelector<HTMLTextAreaElement>("#prompt-variable-email");
+    expect(variableInput).toBeInstanceOf(HTMLTextAreaElement);
+    expect(variableInput?.value).toBe("메일 내용 예시입니다.");
+
+    act(() => {
+      getButton(page, "새 예시").click();
+    });
+
+    expect(variableInput?.value).toContain("지난 분기 매출");
   });
 
   it("shows disabled loading feedback while saving a prompt", async () => {
