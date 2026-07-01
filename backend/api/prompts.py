@@ -49,11 +49,21 @@ class PromptResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PromptTestSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model: str | None = Field(default=None, min_length=1, max_length=128)
+    temperature: float = Field(default=0.0, ge=0.0, le=1.0)
+    response_style: str | None = Field(default=None, min_length=1, max_length=80)
+    output_format: str | None = Field(default=None, min_length=1, max_length=80)
+
+
 class PromptTestRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content: str = Field(min_length=1, max_length=PROMPT_TEST_MAX_CONTENT_CHARS)
     variables: dict[str, str]
+    settings: PromptTestSettings | None = None
 
     @field_validator("variables")
     @classmethod
@@ -77,10 +87,12 @@ async def execute_prompt_with_llm(
     api_key: str,
     base_url: Optional[str] = None,
     *,
+    model_name: str | None = None,
+    temperature: float = 0.0,
     system_message: str | None = None,
 ) -> dict:
     from openai import AsyncOpenAI
-    from core.config import settings
+    from core.config import settings as app_settings
 
     validated_base_url, http_client = await build_llm_provider_http_client(base_url)
     messages = []
@@ -94,9 +106,9 @@ async def execute_prompt_with_llm(
     )
     try:
         response = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
+            model=model_name or app_settings.OPENAI_MODEL,
             messages=messages,
-            temperature=0.0,
+            temperature=temperature,
             max_tokens=512,
         )
         content = response.choices[0].message.content
@@ -126,6 +138,23 @@ def _render_prompt_test_content(data: PromptTestRequest) -> str:
         return _render_prompt_test_variable(name, data.variables[name])
 
     return PROMPT_TEST_PLACEHOLDER_PATTERN.sub(render_match, data.content)
+
+
+def _resolve_prompt_test_model(settings: PromptTestSettings | None) -> str | None:
+    if settings is None or settings.model in (None, "provider-default"):
+        return None
+    return settings.model
+
+
+def _build_prompt_test_system_message(settings: PromptTestSettings | None) -> str:
+    message_parts = [PROMPT_TEST_SYSTEM_MESSAGE]
+    if settings is None:
+        return "\n".join(message_parts)
+    if settings.response_style:
+        message_parts.append(f"Response style: {settings.response_style}")
+    if settings.output_format:
+        message_parts.append(f"Output format: {settings.output_format}")
+    return "\n".join(message_parts)
 
 
 @router.get("", response_model=List[PromptResponse])
@@ -208,5 +237,7 @@ async def test_prompt(
         prompt_text,
         api_key,
         base_url,
-        system_message=PROMPT_TEST_SYSTEM_MESSAGE,
+        model_name=_resolve_prompt_test_model(data.settings),
+        temperature=data.settings.temperature if data.settings else 0.0,
+        system_message=_build_prompt_test_system_message(data.settings),
     )

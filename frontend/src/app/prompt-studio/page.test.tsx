@@ -5,14 +5,23 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("lucide-react", () => ({
   AlertCircle: () => <svg aria-hidden="true" />,
+  BarChart3: () => <svg aria-hidden="true" />,
   CheckIcon: () => <svg aria-hidden="true" />,
   CheckCircle2: () => <svg aria-hidden="true" />,
+  Clock3: () => <svg aria-hidden="true" />,
   Code: () => <svg aria-hidden="true" />,
   FileText: () => <svg aria-hidden="true" />,
+  History: () => <svg aria-hidden="true" />,
+  LayoutTemplate: () => <svg aria-hidden="true" />,
+  ListChecks: () => <svg aria-hidden="true" />,
   Loader2: () => <svg aria-hidden="true" data-testid="loader" />,
+  MoreHorizontal: () => <svg aria-hidden="true" />,
   Play: () => <svg aria-hidden="true" />,
+  RefreshCw: () => <svg aria-hidden="true" />,
+  Rocket: () => <svg aria-hidden="true" />,
   Save: () => <svg aria-hidden="true" />,
   Share2: () => <svg aria-hidden="true" />,
+  SlidersHorizontal: () => <svg aria-hidden="true" />,
   Sparkles: () => <svg aria-hidden="true" />,
   Variable: () => <svg aria-hidden="true" />,
 }));
@@ -60,6 +69,15 @@ function setControlValue(control: HTMLInputElement | HTMLTextAreaElement, value:
     valueSetter?.call(control, value);
     control.dispatchEvent(new Event("input", { bubbles: true }));
   });
+}
+
+function defaultPromptTestSettings() {
+  return {
+    model: "gpt-4o",
+    temperature: 0.3,
+    response_style: "전문적이고 간결하게",
+    output_format: "마크다운 (Markdown)",
+  };
 }
 
 function lowerCaseHeaders(headers: HeadersInit | undefined) {
@@ -136,6 +154,24 @@ describe("PromptStudioPage", () => {
     }
   });
 
+  it("renders the full Prompt Studio surface from the UI/UX reference", async () => {
+    const page = await renderPage();
+
+    for (const section of [
+      "프롬프트 템플릿",
+      "프롬프트 에디터",
+      "모델 및 설정",
+      "라이브 미리보기",
+      "품질 체크리스트",
+      "버전 히스토리",
+      "최근 테스트 결과",
+      "배포 이력",
+      "활용 지표",
+    ]) {
+      expect(page.textContent).toContain(section);
+    }
+  });
+
   it("shows disabled loading feedback while testing a prompt", async () => {
     const promptTest = deferred<Response>();
     const fetchMock = vi.fn(() => promptTest.promise);
@@ -163,12 +199,31 @@ describe("PromptStudioPage", () => {
         body: JSON.stringify({
           content: "핵심 맥락을 종합해주세요: {{email}}",
           variables: { email: "메일 내용 예시입니다." },
+          settings: defaultPromptTestSettings(),
         }),
         credentials: "same-origin",
         method: "POST",
       }),
     );
     expectNoPublicIdentityHeaders((fetchMock.mock.calls[0] as unknown as [RequestInfo, RequestInit?])?.[1]?.headers);
+
+    act(() => {
+      getButton(page, "데이터 분석 인사이트").click();
+    });
+    expect(page.textContent).not.toContain("맥락 종합 결과");
+  });
+
+  it("loads a fresh sample input from the preview panel", async () => {
+    const page = await renderPage();
+    const variableInput = page.querySelector<HTMLTextAreaElement>("#prompt-variable-email");
+    expect(variableInput).toBeInstanceOf(HTMLTextAreaElement);
+    expect(variableInput?.value).toBe("메일 내용 예시입니다.");
+
+    act(() => {
+      getButton(page, "새 예시").click();
+    });
+
+    expect(variableInput?.value).toContain("지난 분기 매출");
   });
 
   it("shows disabled loading feedback while saving a prompt", async () => {
