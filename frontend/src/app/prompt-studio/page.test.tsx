@@ -209,6 +209,29 @@ describe("PromptStudioPage", () => {
     expect(page.textContent).toContain("AI 허브에서 실행 후보와 평가 근거로 연결됩니다.");
   });
 
+  it("keeps prototype-like variable names as own payload fields", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ result: "안전한 실행 결과" })));
+    vi.stubGlobal("fetch", fetchMock);
+    const page = await renderPage();
+
+    setControlValue(page.querySelector<HTMLTextAreaElement>("#prompt-content")!, "검토: {{__proto__}}");
+    const variableInput = page.querySelector<HTMLTextAreaElement>("#prompt-variable-__proto__");
+    expect(variableInput).toBeInstanceOf(HTMLTextAreaElement);
+    expect(variableInput?.value).toBe("");
+
+    setControlValue(variableInput!, "프로토타입 안전 값");
+    act(() => {
+      getButton(page, "실행 (Test)").click();
+    });
+    await flushAsyncWork();
+
+    const requestInit = (fetchMock.mock.calls[0] as unknown as [RequestInfo, RequestInit])?.[1];
+    const payload = JSON.parse(String(requestInit.body));
+    expect(Object.prototype.hasOwnProperty.call(payload.variables, "__proto__")).toBe(true);
+    expect(payload.variables["__proto__"]).toBe("프로토타입 안전 값");
+    expectNoPublicIdentityHeaders(requestInit.headers);
+  });
+
   it("blocks save before required prompt metadata is present", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

@@ -35,11 +35,26 @@ type PromptFormData = {
   is_shared: boolean;
 };
 
+type VariableValues = Record<string, string>;
+
 const DEFAULT_CONTENT = '핵심 맥락을 종합해주세요: {{email}}';
-const DEFAULT_VARIABLE_VALUES: Record<string, string> = {
-  email: '메일 내용 예시입니다.',
-};
 const PLACEHOLDER_PATTERN = /\{\{([A-Za-z_][A-Za-z0-9_]{0,63})\}\}/g;
+
+function createVariableValueMap(entries: Iterable<readonly [string, string]> = []): VariableValues {
+  const values = Object.create(null) as VariableValues;
+  for (const [key, value] of entries) {
+    values[key] = value;
+  }
+  return values;
+}
+
+const DEFAULT_VARIABLE_VALUES = createVariableValueMap([
+  ['email', '메일 내용 예시입니다.'],
+]);
+
+function getOwnVariableValue(values: VariableValues, key: string) {
+  return Object.prototype.hasOwnProperty.call(values, key) ? values[key] : undefined;
+}
 
 function extractPromptVariables(content: string) {
   const variables = new Set<string>();
@@ -49,17 +64,20 @@ function extractPromptVariables(content: string) {
   return Array.from(variables);
 }
 
-function renderPromptPreview(content: string, variables: Record<string, string>) {
+function renderPromptPreview(content: string, variables: VariableValues) {
   return content.replace(PLACEHOLDER_PATTERN, (placeholder, name: string) => {
-    const value = variables[name];
+    const value = getOwnVariableValue(variables, name);
     return value?.trim() ? value : placeholder;
   });
 }
 
-function syncVariableValues(variableNames: string[], currentValues: Record<string, string>) {
-  const nextValues: Record<string, string> = {};
+function syncVariableValues(variableNames: string[], currentValues: VariableValues) {
+  const nextValues = createVariableValueMap();
   for (const variableName of variableNames) {
-    nextValues[variableName] = currentValues[variableName] ?? DEFAULT_VARIABLE_VALUES[variableName] ?? '';
+    nextValues[variableName] =
+      getOwnVariableValue(currentValues, variableName) ??
+      getOwnVariableValue(DEFAULT_VARIABLE_VALUES, variableName) ??
+      '';
   }
   return nextValues;
 }
@@ -76,7 +94,9 @@ export default function PromptStudioPage() {
     is_shared: false,
   });
   const promptVariables = useMemo(() => extractPromptVariables(formData.content), [formData.content]);
-  const [variableValues, setVariableValues] = useState<Record<string, string>>(DEFAULT_VARIABLE_VALUES);
+  const [variableValues, setVariableValues] = useState<VariableValues>(() =>
+    createVariableValueMap(Object.entries(DEFAULT_VARIABLE_VALUES)),
+  );
   const [testResult, setTestResult] = useState('');
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -100,8 +120,13 @@ export default function PromptStudioPage() {
     setVariableValues((currentValues) => syncVariableValues(extractPromptVariables(content), currentValues));
   };
 
-  const buildVariablesPayload = () =>
-    Object.fromEntries(promptVariables.map((variableName) => [variableName, variableValues[variableName] ?? '']));
+  const buildVariablesPayload = () => {
+    const payload = createVariableValueMap();
+    for (const variableName of promptVariables) {
+      payload[variableName] = getOwnVariableValue(variableValues, variableName) ?? '';
+    }
+    return payload;
+  };
 
   const validateForSave = () => {
     if (!formData.title.trim()) {
@@ -318,10 +343,14 @@ export default function PromptStudioPage() {
                         id={`prompt-variable-${variableName}`}
                         className="min-h-24"
                         placeholder={`${variableName} 변수 값`}
-                        value={variableValues[variableName] ?? ''}
+                        value={getOwnVariableValue(variableValues, variableName) ?? ''}
                         onChange={(event) => {
                           const value = event.target.value;
-                          setVariableValues((current) => ({ ...current, [variableName]: value }));
+                          setVariableValues((current) => {
+                            const nextValues = createVariableValueMap(Object.entries(current));
+                            nextValues[variableName] = value;
+                            return nextValues;
+                          });
                           setError(null);
                         }}
                       />
